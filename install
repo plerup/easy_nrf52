@@ -1,0 +1,183 @@
+#!/usr/bin/env perl
+#====================================================================================
+# install
+#
+# Installation script for easy_nrf52
+#
+# This file is part of easy_nrf52
+# License: LGPL 2.1
+# General and full license information is available at:
+#    https://github.com/plerup/easy_nrf52
+#
+# Copyright (c) 2022 Peter Lerup. All rights reserved.
+#
+#====================================================================================
+
+use strict;
+
+use File::Basename;
+use Cwd 'abs_path';
+
+my $env_name = "easy_nrf52";
+my $this_dir = dirname(abs_path(__FILE__));
+my $bin_dir = "/usr/local/bin";
+
+my $gcc_version = "gcc-arm-none-eabi-10.3-2021.10";
+my @tool_list = (
+"https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/$gcc_version-x86_64-linux.tar.bz2",
+"https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/nRF-command-line-tools/sw/Versions-10-x-x/10-15-2/nrf-command-line-tools_10.15.2_amd64.deb",
+);
+
+sub prompt {
+  my ($mess, $def) = @_;
+  print $mess, " [$def]: ";
+  my $resp = <STDIN>;
+  $resp =~ s/\s*$//;
+  return $resp || $def;
+}
+
+#--------------------------------------------------------------------
+
+sub find_sdk {
+  my ($vers) = @_;
+  my $main_ver = $1 if $vers =~ /^(\d+)/;
+  die "Invalid version: $vers\n" unless $main_ver;
+  my $url = "https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v$main_ver.x.x/";
+  my $list = `wget -O - $url 2>/dev/null`;
+  my $zip;
+  while ($list =~ s/href\=\"(nRF5_SDK_$vers\S+.zip)\"//m) {
+    $zip = "$url$1" unless $1 =~ /_doc/;
+  }
+  die "Unable to find version $vers\n" unless $zip;
+  return $zip;
+}
+
+#--------------------------------------------------------------------
+
+sub command {
+  #print "* @_\n";
+  `@_`;
+  die "\n" if $@;
+}
+
+#--------------------------------------------------------------------
+
+sub mk_dir {
+  command("mkdir -p @_");
+}
+
+#--------------------------------------------------------------------
+
+sub download {
+  my ($url, $dst_dir) = @_;
+  my $name = basename($url);
+  my $dst = "$dst_dir/$name";
+  print "  $name\n";
+  return if -f $dst;
+  command("wget -q \"$url\" -O \"$dst\"") unless -f $dst;
+}
+
+#--------------------------------------------------------------------
+
+sub string_to_file {
+  my $f;
+  open($f, ">$_[0]") || return 0;
+  print $f $_[1];
+  close($f);
+  return 1;
+}
+
+#--------------------------------------------------------------------
+
+sub file_to_string {
+  local($/);
+  my $f;
+  open($f, $_[0]) || return "";
+  my $res = <$f>;
+  close($f);
+  return $res;
+}
+
+#--------------------------------------------------------------------
+
+sub create_command {
+  command("sudo ln -s -f $this_dir/tools/$_[0] $bin_dir/$_[0]");
+}
+
+#--------------------------------------------------------------------
+
+my $install_root = prompt("Installation root directory", "$ENV{'HOME'}/.$env_name");
+my $sdk_list = prompt("Nordic SDK version(s)", "15 17");
+
+my %sdks;
+print "Validating SDKs...\n";
+foreach (split(/\s+/, $sdk_list)) {
+  $sdks{$_} = find_sdk($_), "\n";
+}
+my @sdk_names = sort keys %sdks;
+my $def_sdk;
+do {
+  $def_sdk = prompt("Select default SDK", $sdk_names[0]);
+} while (!$sdks{$def_sdk});
+
+my $setup_dir = $install_root . "/setup";
+mk_dir($setup_dir);
+print "Downloading SDK(s) and tools...\n";
+foreach (@sdk_names) {
+  download($sdks{$_}, $setup_dir);
+}
+foreach (@tool_list) {
+  download($_, $setup_dir);
+}
+print "Unpacking...\n";
+foreach (glob("$setup_dir/*")) {
+  if (/nRF5_SDK/) {
+    /([^\/]+)\.zip/;
+    my $dir = "$install_root/$1";
+    print "  $1\n";
+    command("rm -rf $dir") if -d $dir;
+    command("unzip -q -o -d $install_root $_");
+    # Patch the common makefiles to make them use the gcc installed here
+    my $mk_file = "$dir/components/toolchain/gcc/Makefile.posix";
+    my $txt = file_to_string($mk_file);
+    $txt =~ s/(GNU_INSTALL_ROOT \S=).+/$1 $install_root\/$gcc_version\/bin\//;
+    string_to_file($mk_file, $txt);
+    $mk_file = "$dir/components/toolchain/gcc/Makefile.common";
+    $txt = file_to_string($mk_file);
+    $txt =~ s/mkdir/mkdir -p/;
+    string_to_file($mk_file, $txt);
+  } elsif (/gcc-arm/) {
+    /(.+)\.bz/;
+    my $tar = $1;
+    print "  ", basename($tar), "\n";
+    command("rm -rf $install_root/gcc-arm*");
+    command("bunzip2 -k $_");
+    command("tar -xf $tar -C $install_root");
+    command("rm $tar");
+  }
+}
+
+print "Installing, sudo will be required\n";
+command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
+command("sudo apt install python3-pip srecord openocd -qq -y >/dev/null 2>&1");
+command("sudo pip3 -q install nrfutil bleak");
+
+create_command("enrfmake");
+create_command("enrfuart");
+create_command("enrfscan");
+create_command("enrfpath");
+string_to_file("$ENV{'HOME'}/.$env_name.install",
+  "# $env_name installation information\n" .
+  "INSTALL_ROOT = $install_root\n" .
+  "SDK_VERSION = $def_sdk\n");
+
+print "\n";
+print "==== Installation completed ==== \n";
+print "* PLEASE NOTE! *\n";
+print "In order to use boards with Segger modules you have to manually install the JLinks software from:\n";
+print "  https://www.segger.com/downloads/jlink/\n";
+print "For debugging in Visual Studio, the Cortex-debug module must be installed from:\n";
+print "  https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug\n";
+print "\n";
+
+

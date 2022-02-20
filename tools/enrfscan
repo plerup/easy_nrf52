@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+#
+# enrfscan
+#
+# Scan and list information about advertising BLE devices
+# New listing whenever the advertisement changes
+# Format: address;name;manufacurer_data;rssi
+# Possible filter string can be on the command line
+#
+
+import asyncio
+import sys
+
+from bleak import BleakScanner
+from bleak.backends.scanner import AdvertisementData
+from bleak.backends.device import BLEDevice
+
+
+async def do_scan(match):
+    dev_list = dict()
+
+    def show_if_match(device: BLEDevice, adv: AdvertisementData):
+        manuf_data = ""
+        for company, data in adv.manufacturer_data.items():
+            manuf_data += "%02X" % int((company) % 255) + "%02X" % int((company)/255)
+            manuf_data += data.hex().upper()
+        info = device.address + ";" + (adv.local_name or "") + ";" + manuf_data
+        if not device.address in dev_list:
+            dev_list[device.address] = ""
+        if (len(match) == 0 or match in info) and dev_list[device.address] != info:
+            print(info + ";" + str(device.rssi))
+        dev_list[device.address] = info
+        return False
+
+    while True:
+        await BleakScanner.find_device_by_filter(show_if_match, 1)
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(do_scan("" if len(sys.argv) < 2 else str(sys.argv[1])))
+    except KeyboardInterrupt:
+        print()
+        pass

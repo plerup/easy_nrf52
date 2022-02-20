@@ -1,0 +1,1 @@
+echo -n $(realpath $(dirname $(realpath $0))/..)/easy_nrf52.mk

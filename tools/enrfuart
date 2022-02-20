@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+#
+# enrfuart
+#
+# Connects terminal to a BLE device with Nordic uart service
+#
+
+import asyncio
+import sys
+
+from bleak import BleakScanner, BleakClient
+from bleak.backends.scanner import AdvertisementData
+from bleak.backends.device import BLEDevice
+
+UART_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+UART_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+
+received = ""
+
+async def uart_terminal(addr):
+    disconnecting = False
+
+    def match_addr(device: BLEDevice, adv: AdvertisementData):
+        if device.address == addr:
+            return True
+        return False
+
+    device = await BleakScanner.find_device_by_filter(match_addr)
+
+    def handle_disconnect(_: BleakClient):
+        if not disconnecting:
+            print("* Unit disconnected, press return")
+        for task in asyncio.all_tasks():
+            task.cancel()
+
+    def handle_rx(_: int, data: bytearray):
+        global received
+        received += data.decode("latin")
+        if 0 in data:
+            print(received)
+            received = ""
+
+    async with BleakClient(device, disconnected_callback=handle_disconnect) as client:
+        await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
+
+        print("Connected")
+        loop = asyncio.get_running_loop()
+        while True:
+            data = await loop.run_in_executor(None, sys.stdin.buffer.readline)
+            if not data:
+                disconnecting = True
+                print("Disconnecting...")
+                break
+            await client.write_gatt_char(UART_RX_CHAR_UUID, data)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: enrfuart mac_addr")
+        exit(1)
+    try:
+        asyncio.run(uart_terminal(str(sys.argv[1])))
+    except asyncio.CancelledError:
+        pass
+    except KeyboardInterrupt:
+        print()
+        pass
