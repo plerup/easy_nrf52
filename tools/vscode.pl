@@ -3,7 +3,7 @@
 # vscode.pl
 #
 # Generates Visual Studio Code properties, task and launch config files
-# based on the compile command line and then starts VS Code
+# based on compile command line content and then starts VS Code
 #
 # This file is part of easy_nrf52
 # License: LGPL 2.1
@@ -66,9 +66,6 @@ sub insert_or_replace {
     $keep
   ) = @_;
   my $data = decode_json(file_to_string($file_name) || $def_json);
-  # Make paths more portable by using variables in paths when possible
-  $item_json =~ s/$workspace_dir/\$\{workspaceFolder\}/g;
-  $item_json =~ s/$ENV{'HOME'}/\$\{env:HOME\}/g;
   my $new_item = decode_json($item_json);
   # Find possible existing item
   my $list_ref = $$data{$list_name};

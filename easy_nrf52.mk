@@ -42,6 +42,9 @@ ifeq ($(wildcard $(GCC_ROOT)),)
   $(error No GCC installation found")
 endif
 
+# Include possible local configuration
+-include $(CONFIG_NAME)
+
 # Board handling
 BOARD ?= pca10056
 SDK_BOARD_DIR := $(SDK_ROOT)/components/boards
@@ -70,13 +73,11 @@ PROJ_VERSION = $(call git_description, $(dir $(PROJ_MAIN)))
 ENV_VERSION =  $(call git_description, $(ENV_ROOT))
 
 # Use demo application unless specified or available in current directory
-PROJ_MAIN ?= $(firstword $(realpath $(wildcard main.c*)) $(ENV_ROOT)/src/examples/template/main.c)
+DEMO_APP = $(ENV_ROOT)src/examples/template/main.c
+PROJ_MAIN ?= $(firstword $(realpath $(wildcard main.c*)) $(DEMO_APP))
 PROJ_NAME ?= $(notdir $(patsubst %/,%,$(dir $(realpath $(PROJ_MAIN)))))
 
 BUILD_ROOT ?= /tmp/$(ENV_NAME)/$(PROJ_NAME)/$(BOARD)
-
-# Include possible local configuration
--include $(CONFIG_NAME)
 
 # Use multiple threads when building executables
 ifeq ($(MAKECMDGOALS),)
@@ -93,6 +94,7 @@ ifneq ($(IGNORE_STATE),1)
   # Ignore som specific variables
   STATE_INF := $(patsubst MONITOR_PORT%,,$(STATE_INF))
   STATE_INF := $(patsubst DFU_ADDR%,,$(STATE_INF))
+  STATE_INF := $(patsubst VERBOSE%,,$(STATE_INF))
   PREV_STATE_INF := $(if $(wildcard $(STATE_LOG)),$(shell cat $(STATE_LOG)),$(STATE_INF))
   ifneq ($(PREV_STATE_INF),$(STATE_INF))
     $(info * Build state has changed, doing a full rebuild *)
@@ -230,16 +232,18 @@ VPATH += $(sort $(dir $(SRC_FILES)))
 COMP_DEP = $(MAKEFILE_LIST) $(SDK_CONFIG) | $(OBJ_DIR)
 
 # Compile
+C_COM = $(GCC_PREFIX) $(CC) -c $(CFLAGS) $(C_INCLUDES) --std=gnu99
+CPP_COM = $(GCC_PREFIX) $(CXX) -c $(CFLAGS) $(C_INCLUDES) --std=gnu++11 -fno-rtti
 $(OBJ_DIR)/%.c$(OBJ_EXT): %.c $(COMP_DEP)
-	echo  CC $(<F)
-	$(GCC_PREFIX) $(CC) -c -MMD $(CFLAGS) $(C_INCLUDES) $($(<F)_CFLAGS) --std=gnu99 $(realpath $<) -o $@
+	echo CC $(<F)
+	$(C_COM) -MMD $($(<F)_CFLAGS) $(realpath $<) -o $@
 
 $(OBJ_DIR)/%.cpp$(OBJ_EXT): %.cpp $(COMP_DEP)
-	echo  CCX $(<F)
-	$(GCC_PREFIX) $(CXX) -c -MMD $(CFLAGS) $(C_INCLUDES) $($(<F)_CFLAGS) --std=gnu++11 -fno-rtti $(realpath $<) -o $@
+	echo CCX $(<F)
+	$(CPP_COM) -MMD $($(<F)_CFLAGS) $(realpath $<) -o $@
 
 $(OBJ_DIR)/%.S$(OBJ_EXT): %.S $(COMP_DEP)
-	echo  ASM $(<F)
+	echo ASM $(<F)
 	$(CC) -c -MMD -x assembler-with-cpp $(ASMFLAGS) $(C_INCLUDES) $(realpath $<) -o $@
 
 # Link the main executable
@@ -262,6 +266,22 @@ $(OUT_HEX): $(OBJ_FILES) $(LINKER_SCRIPT)
 	$(OBJCOPY) -O ihex $(OUT_ELF) $(OUT_HEX)
 	$(SIZE) -A $(OUT_ELF) | perl -e 'while (<>) {$$r += $$1 if /^\.(?:data|bss)\s+(\d+)/;$$f += $$1 if /^\.(?:text|data)\s+(\d+)/;}print "\nMemory usage\n";print sprintf("  %-6s %6d bytes (%.0f KB)\n" x 2 ."\n", "Ram:", $$r, $$r/1024, "Flash:", $$f, $$f/1024);'
 	@perl -e 'print "Build complete. Elapsed time: ", time()-$(START_TIME),  " seconds\n\n"'
+ifeq ($(DEMO_APP),$(PROJ_MAIN))
+	echo "======================================================"
+	echo "=== Please note that this is the example template! ==="
+	echo "======================================================\n"
+endif
+
+# Run compiler preprocessor to get full expanded source for a file
+preproc:
+ifeq ($(SRC_FILE),)
+	$(error SRC_FILE must be defined)
+endif
+ifneq ($(findstring .cpp,$(notdir $(SRC_FILE))),)
+	$(CPP_COM) -E $(SRC_FILE)
+else
+	$(C_COM) -E $(SRC_FILE)
+endif
 
 clean: $(BUILD_DIR)
 	@echo Removing all build files
@@ -295,7 +315,8 @@ hex_all:
 	srec_cat $(SOFTDEVICE) -Intel $(BOOTLOADER_FILE) -Intel $(OUT_HEX) -Intel $(BOOTLOADER_SETTINGS) -Intel -o $(ALL_HEX_FILE) -Intel
 
 list_files:
-	perl -e 'foreach (@ARGV) {print "$$_\n"}' "===== Include directories =====" $(INC_FOLDERS)  "===== Source files =====" $(SRC_FILES) $(CFLAGS)
+	perl -e 'foreach (@ARGV) {print "$$_\n"}' "===== Include directories =====" $(INC_FOLDERS)  "===== Source files =====" $(SRC_FILES) \
+	    "===== Compilation definitions =====" $(CFLAGS)
 
 # == Flashing operations ==
 
@@ -377,6 +398,8 @@ $(LAST_FLASH): $(OUT_HEX)
 	$(SUB_MAKE) flash
 
 build_flash: $(LAST_FLASH)
+	$(SUB_MAKE)
+	$(SUB_MAKE) $(LAST_FLASH)
 
 flash_softdevice: $(SOFTDEVICE)
 	$(call WRITE_FILE_TO_FLASH,$<)
@@ -470,7 +493,7 @@ gen_priv_key:
 	nrfutil keys generate $(PROJ_PRIV_KEY_NAME)
 
 # Nordic dfu zip
-DFU_ZIP ?= $(PROJ_NAME)_dfu.zip
+DFU_ZIP ?= $(PROJ_NAME)_$(BOARD)_dfu.zip
 dfu_zip $(DFU_ZIP):
 	$(SUB_MAKE)
 	echo Signing package with key file: $(PRIV_KEY_FILE)
@@ -482,10 +505,16 @@ dfu_zip $(DFU_ZIP):
 
 # Run dfu via nrfdfu program
 DFU_TEMP_DIR = $(BUILD_ROOT)/_dfu
-DFU_PAR = $(if $(findstring ble,$(BL_COM)),-b $(DFU_ADDR),-t serial -p $(DFU_PORT))
+DFU_BLE = $(if $(findstring ble,$(BL_COM)),1,)
+DFU_DEST = $(if $(DFU_BLE),$(DFU_ADDR),$(DFU_PORT))
+DFU_PAR = $(if $(findstring ble,$(BL_COM)),-b $(DFU_DEST),-t serial -p $(DFU_DEST))
 PORT_DEF ?= ACM
 DFU_PORT ?= $(shell ls -1tr /dev/tty$(PORT_DEF)* 2>/dev/null | tail -1)
 dfu:
+ifeq ($(DFU_DEST),)
+	@echo == Error: DFU destination not specified
+	exit 1
+endif
 	$(SUB_MAKE) dfu_zip
 	$(TOOLS_DIR)/nrfdfu $(DFU_PAR) -f $(DFU_ZIP)
 
