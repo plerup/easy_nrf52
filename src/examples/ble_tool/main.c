@@ -393,7 +393,7 @@ static void handle_command() {
   } else if (CMD_EQ("mac")) {
     CMD_OK("%s", enrf_get_device_address());
   } else {
-    RESP_ERROR("Invalid command: %s", m_command);
+    RESP_ERROR("Invalid command: \"%s\" Type help for listing", m_command);
   }
 }
 

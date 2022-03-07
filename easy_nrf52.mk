@@ -60,7 +60,7 @@ BOARD_DIR := $(dir $(BOARD_H))
 # Detect chip type unless defined in board config
 CHIP ?= $(if $(findstring $(BOARD),pca10040),nrf52832,nrf52840)
 CHIP_FAM = $(if $(findstring $(CHIP),nrf52832),NRF52,NRF52840)
-# Softdevice variant based on chip type
+# Select softdevice variant based on chip type
 SD_NAME ?= $(if $(findstring $(CHIP),nrf52832),s132,s140)
 # Softdevice file
 SOFTDEVICE := $(firstword $(wildcard $(SDK_ROOT)/components/softdevice/$(SD_NAME)/hex/*.hex))
@@ -91,7 +91,7 @@ endif
 ifneq ($(IGNORE_STATE),1)
   STATE_LOG := $(BUILD_ROOT)/state.txt
   STATE_INF := $(CMD_DEFINES) $(PROJ_VERSION) $(ENV_VERSION)
-  # Ignore som specific variables
+  # Ignore some specific variables
   STATE_INF := $(patsubst MONITOR_PORT%,,$(STATE_INF))
   STATE_INF := $(patsubst DFU_ADDR%,,$(STATE_INF))
   STATE_INF := $(patsubst VERBOSE%,,$(STATE_INF))
@@ -152,7 +152,7 @@ endif
 ifneq ($(UART_LOG),0)
   # Add the uart backend and set used tx pin
   SRC_FILES += $(SDK_ROOT)/components/libraries/log/src/nrf_log_backend_uart.c
-	UART_LOG_PIN ?= TX_PIN_NUMBER
+  UART_LOG_PIN ?= TX_PIN_NUMBER
   nrf_log_backend_uart.c_CFLAGS = \
     -include $(BOARD_H) \
     -DNRF_LOG_BACKEND_UART_TEMP_BUFFER_SIZE=64 -DNRF_LOG_BACKEND_UART_BAUDRATE=UART_BAUDRATE_BAUDRATE_Baud$(UART_BAUDRATE) \
@@ -163,8 +163,8 @@ endif
 # Buttonless DFU
 ifeq ($(BUTTONLESS_DFU),1)
   INC_FOLDERS += \
-	  $(SDK_ROOT)/components/libraries/bootloader \
-		$(SDK_ROOT)/components/libraries/bootloader/dfu $(SDK_ROOT)/components/libraries/bootloader/ble_dfu
+    $(SDK_ROOT)/components/libraries/bootloader \
+  	$(SDK_ROOT)/components/libraries/bootloader/dfu $(SDK_ROOT)/components/libraries/bootloader/ble_dfu
 
   SRC_FILES += $(SDK_ROOT)/components/libraries/bootloader/dfu/nrf_dfu_svci.c \
     $(SDK_ROOT)/components/ble/ble_services/ble_dfu/ble_dfu.c \
@@ -283,13 +283,14 @@ else
 	$(C_COM) -E $(SRC_FILE)
 endif
 
-clean: $(BUILD_DIR)
+clean:
 	@echo Removing all build files
 	rm -rf $(BUILD_ROOT)
 
 # Bootloader management
 BL_TYPE ?= secure
 BL_COM ?= ble
+# Bootloader settings are required when flashing a new application
 BOOTLOADER_SETTINGS = $(BUILD_ROOT)/bl_settings.hex
 $(BOOTLOADER_SETTINGS) bootloader_settings: $(OUT_HEX)
 	echo Generating bootloader settings
@@ -314,9 +315,10 @@ hex_all:
 	echo "Creating combined flash file: \"$(ALL_HEX_FILE)\"..."
 	srec_cat $(SOFTDEVICE) -Intel $(BOOTLOADER_FILE) -Intel $(OUT_HEX) -Intel $(BOOTLOADER_SETTINGS) -Intel -o $(ALL_HEX_FILE) -Intel
 
+# Show all involved include directories, source files and compilation defines
 list_files:
 	perl -e 'foreach (@ARGV) {print "$$_\n"}' "===== Include directories =====" $(INC_FOLDERS)  "===== Source files =====" $(SRC_FILES) \
-	    "===== Compilation definitions =====" $(CFLAGS)
+	    "===== Compilation defines =====" $(CFLAGS)
 
 # == Flashing operations ==
 
@@ -397,7 +399,7 @@ flash:
 $(LAST_FLASH): $(OUT_HEX)
 	$(SUB_MAKE) flash
 
-build_flash: $(LAST_FLASH)
+build_flash:
 	$(SUB_MAKE)
 	$(SUB_MAKE) $(LAST_FLASH)
 
@@ -527,6 +529,7 @@ monitor:
 
 run:
 	$(SUB_MAKE) build_flash
+	sleep 2
 	$(MONITOR_COM)
 
 # Other build options
@@ -552,5 +555,59 @@ list_segger:
 	$(FLASH_COM) --com
 
 help:
-	echo Not available yet
-
+help:
+	@echo
+	@echo "Makefile for building software for the nrf52 chipset using the Nordic SDK"
+	@echo "This file can either be used directly or included from another makefile"
+	@echo ""
+	@echo "The following targets are available:"
+	@echo "  default (or empty)   Build the project application executable"
+	@echo "  clean                Remove all intermediate build files"
+	@echo "  flash                Build and and flash the project application"
+	@echo "  flash_all            Complete reflash of the unit"
+	@echo "                         including softdevice, bootloader and application"
+	@echo "  dfu                  Build and and flash via dfu"
+	@echo "                         Params: DFU_ADDR or DFU_PORT"
+	@echo "  dfu_zip              Create standard Nordic dfu zip file"
+	@echo "                         File name controlled by DFU_ZIP"
+	@echo "                         Default: '$(DFU_ZIP)'"
+	@echo "  hex_all              Create combined flash file with all"
+	@echo "                         required components for later flashing"
+	@echo "  dump_flash           Dump the whole board flash memory to a file"
+	@echo "  flash_file           Restore flash memory from a previously dumped file"
+	@echo "  erase_flash          Erase the whole flash (use with care!)"
+	@echo "  list_files           Show a list of used solurce files and include directories"
+	@echo "  vscode               Create config file for Visual Studio Code and launch"
+	@echo "  monitor              Start serial monitor on the upload port"
+	@echo "  run                  Build flash and start serial monitor"
+	@echo "  gdb                  Start gdb command line debugger"
+	@echo "  gen_priv_key         Generate a private key file for secure bootloader"
+	@echo "  preproc              Run compiler preprocessor on source file"
+	@echo "                         specified via SRC_FILE"
+	@echo "  list_segger          List serial number of all connected Segger interfaces"
+	@echo "  show_uicr            Show changed UICR registers"
+	@echo "Some of the configurable parameters. For more detailed information check the makefile"
+	@echo "  PROJ_NAME            Main source file"
+	@echo "                         If not specified a search for main.c will be made"
+	@echo "                         and if not found the template example will be used"
+	@echo "  SRC_FILES            Extend this variable to declare additional source files"
+	@echo "  INC_FOLDERS          Extend this to add additional include directories"
+	@echo "  BOARD                Name of the target board. Default: '$(BOARD)'"
+	@echo "  BUILD_ROOT           Directory for intermediate build files."
+	@echo "                         Default '$(BUILD_ROOT)'"
+	@echo "  CFLAGS               Extend with possible extra compilation options"
+	@echo "  PRIV_KEY_FILE        Private key file for secure bootloader"
+	@echo "                         If not specified a deleopment key will be used"
+	@echo "                         Dont use this for product applications!"
+	@echo "  SDK_VERSION          Used SDK version. Default: '$(SDK_VERSION)'"
+	@echo "  MONITOR_PORT         Serial monitor port. Default: '$(MONITOR_PORT)'"
+	@echo "  FLASH_FILE           File name for dump and restore flash operations"
+	@echo "                         Default: '$(FLASH_FILE)'"
+	@echo "  VERBOSE              Set to 1 to get full printout of the build"
+	@echo "  BUILD_THREADS        Number of parallel build threads"
+	@echo "                         Default: Maximum possible, based on number of CPUs"
+	@echo "  USE_CCACHE           Set to 0 to disable ccache when it is available"
+	@echo "  SEGGER_SNR           Required when several Segger unit are present"
+	@echo "  PROG_HW              Flashing and debug hardware interface"
+	@echo "                         segger or stlink"
+	@echo

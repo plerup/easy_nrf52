@@ -928,7 +928,7 @@ static char m_input_buffer[READ_BUFF_SIZE];
 
 size_t enrf_serial_read(char *str, size_t max_length) {
   if (!m_input_available) return 0;
-  size_t len = MIN(max_length - 1, m_input_pos);
+  size_t len = MIN(max_length - 1, MAX(1, m_input_pos));
   strncpy(str, m_input_buffer, len);
   str[len] = 0;
   m_input_pos = 0;
@@ -1050,13 +1050,13 @@ void serial_init() {
 //--------------------------------------------------------------------------
 
 ret_code_t enrf_serial_write(const char *str) {
-  ret_code_t res = NRF_ERROR_BUSY;
-  static char buff[255];
-  strlcpy(buff, str, sizeof(buff));
-  do {
-    res = app_usbd_cdc_acm_write(&m_app_cdc_acm, buff, strlen(buff));
-    app_usbd_event_queue_process();
-  } while (res == NRF_ERROR_BUSY);
+  ret_code_t res = NRF_SUCCESS;
+  for (int i = 0; i < strlen(str); i++) {
+    do {
+      res = app_usbd_cdc_acm_write(&m_app_cdc_acm, str+i, 1);
+      app_usbd_event_queue_process();
+    } while (res == NRF_ERROR_BUSY);
+  }
   return res;
 }
 

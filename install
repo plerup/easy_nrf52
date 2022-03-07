@@ -159,7 +159,7 @@ foreach (glob("$setup_dir/*")) {
 
 print "Installing, sudo will be required\n";
 command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
-command("sudo apt install python3-pip srecord openocd -qq -y >/dev/null 2>&1");
+command("sudo apt install python3-pip srecord openocd zlib-dev -qq -y >/dev/null 2>&1");
 command("sudo pip3 -q install nrfutil bleak");
 
 create_command("enrfmake");
@@ -174,7 +174,7 @@ string_to_file("$ENV{'HOME'}/.$env_name.install",
 print "\n";
 print "==== Installation completed ==== \n";
 print "* PLEASE NOTE! *\n";
-print "In order to use boards with Segger modules you have to manually install the JLinks software from:\n";
+print "In order to use boards with Segger modules you have to manually install the JLink software from:\n";
 print "  https://www.segger.com/downloads/jlink/\n";
 print "For debugging in Visual Studio, the Cortex-debug module must be installed from:\n";
 print "  https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug\n";
