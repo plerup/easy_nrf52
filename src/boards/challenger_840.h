@@ -1,3 +1,10 @@
+//
+// challenger_840
+//
+// Board definition for Invector Challenger 840 board
+//
+//
+
 #ifndef BOARD_CHALLENGER_840_H
 #define BOARD_CHALLENGER_840_H
 

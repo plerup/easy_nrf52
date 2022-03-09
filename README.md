@@ -64,6 +64,7 @@ If you have another board this must be specified via the *BOARD* variable, e.g.:
 
     enrfmake BOARD=pca10040
 
+All boards defined in the Nordic SDK can be named and as well as the one in the easy_nrf52 directory src/boards. Board definitions can also be added in the project directory or in a directory defined via the variable *BOARDS_DIR*. The board header file must contain the definitions of leds and buttons. Possible makefile specifics can be define in a file with the same name but with extension .mk .
 
 #### Building projects
 
