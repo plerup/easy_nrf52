@@ -1,3 +1,5 @@
 .vscode
 *_all.hex
 *_dfu.zip
+*.pem
+

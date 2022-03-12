@@ -166,6 +166,8 @@ create_command("enrfmake");
 create_command("enrfuart");
 create_command("enrfscan");
 create_command("enrfpath");
+my $def_priv_key = "$this_dir/bootloader/dev_priv_key.pem";
+command("nrfutil keys generate $def_priv_key") unless -f $def_priv_key;
 string_to_file("$ENV{'HOME'}/.$env_name.install",
   "# $env_name installation information\n" .
   "INSTALL_ROOT = $install_root\n" .
