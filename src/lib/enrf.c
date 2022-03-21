@@ -589,7 +589,7 @@ bool enrf_is_connected() {
 ret_code_t enrf_nus_data_send(const uint8_t *data, uint32_t length) {
   ret_code_t err_code = NRF_SUCCESS;
   while (length) {
-    uint16_t curr = m_gatt_max_length < 30 ? MIN(20, length) : length;
+    uint16_t curr = MIN(m_ble_nus_max_data_len, length);
     do {
       err_code = ble_nus_data_send(&m_nus, (uint8_t*)data, &curr, m_conn_handle);
     } while (err_code == NRF_ERROR_RESOURCES);

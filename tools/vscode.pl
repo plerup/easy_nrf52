@@ -65,6 +65,7 @@ sub insert_or_replace {
     $match,
     $keep
   ) = @_;
+  $item_json =~ s/$ENV{'HOME'}/\$\{env:HOME\}/g;
   my $data = decode_json(file_to_string($file_name) || $def_json);
   my $new_item = decode_json($item_json);
   # Find possible existing item
