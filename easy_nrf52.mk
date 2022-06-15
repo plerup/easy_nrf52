@@ -341,7 +341,13 @@ ifeq ($(PROG_HW),segger)
   ifdef SEGGER_SNR
     # Use specific Segger unit
     FLASH_COM += --snr $(SEGGER_SNR)
+    RTT_PAR = -select USB=$(SEGGER_SNR)
   endif
+  define RTT_COM
+  	JLinkGDBServer -singlerun -nogui -if swd -port 50000 -swoport 50001 -telnetport 50002 -device nrf52 $(RTT_PAR) >/dev/null &
+  	-JLinkRTTClient </dev/null 2>/dev/null
+  	-pkill JLinkGDBServer
+  endef
   FLASH_PROG = $(FLASH_COM) --sectorerase --program $1 --reset
   define FLASH_DUMP
 		$(FLASH_COM) --readcode $1
@@ -525,12 +531,16 @@ MONITOR_PORT ?= $(DFU_PORT)
 MONITOR_SPEED ?= 115200
 MONITOR_COM ?= python3 -m serial.tools.miniterm -e $(MONITOR_PORT) $(MONITOR_SPEED)
 monitor:
+ifneq ($(UART_LOG),0)
 	$(MONITOR_COM)
+else
+	$(RTT_COM)
+endif
 
 run:
 	$(SUB_MAKE) build_flash
 	sleep 2
-	$(MONITOR_COM)
+	$(SUB_MAKE) monitor
 
 # Other build options
 default: $(OUT_HEX)
@@ -579,6 +589,7 @@ help:
 	@echo "  list_files           Show a list of used solurce files and include directories"
 	@echo "  vscode               Create config file for Visual Studio Code and launch"
 	@echo "  monitor              Start serial monitor on the upload port"
+	@echo "                         or if UART_LOG is set to 0, the Segger RTT monitor"
 	@echo "  run                  Build flash and start serial monitor"
 	@echo "  gdb                  Start gdb command line debugger"
 	@echo "  gen_priv_key         Generate a private key file for secure bootloader"
@@ -586,7 +597,8 @@ help:
 	@echo "                         specified via SRC_FILE"
 	@echo "  list_segger          List serial number of all connected Segger interfaces"
 	@echo "  show_uicr            Show changed UICR registers"
-	@echo "Some of the configurable parameters. For more detailed information check the makefile"
+	@echo "Some configurable parameters"
+	@echo "For more detailed information check the makefile"
 	@echo "  PROJ_NAME            Main source file"
 	@echo "                         If not specified a search for main.c will be made"
 	@echo "                         and if not found the template example will be used"

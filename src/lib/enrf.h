@@ -109,6 +109,7 @@ bool enrf_str_to_addr(const char *addr_str, ble_gap_addr_t *gap_addr);
 const char *enrf_get_device_address();
 
 // Serial string I/O to uart or usb. Activated via make variable ENRF_SERIAL
+ret_code_t enrf_serial_enable(bool on);
 ret_code_t enrf_serial_write(const char *str);
 size_t enrf_serial_read(char *str, size_t max_length);
 

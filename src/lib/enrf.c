@@ -121,10 +121,8 @@ static uint16_t    m_gatt_max_length;
 static int         m_restart = 0;
 static bool        m_long_range = false;
 static int         m_tx_power = 0;
+static bool        m_serial_active = false;
 
-static void serial_init();
-
-//--------------------------------------------------------------------------
 
 __WEAK void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name) {
   app_error_handler(0xDEADBEEF, line_num, p_file_name);
@@ -464,7 +462,6 @@ static void db_disc_handler(ble_db_discovery_evt_t *p_evt) {
 
 bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
   ret_code_t err_code;
-  serial_init();
   m_device_name = dev_name;
   log_init();
 #if BLE_DFU_ENABLED == 1
@@ -1033,7 +1030,9 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 
 //--------------------------------------------------------------------------
 
-void serial_init() {
+ret_code_t enrf_serial_enable(bool on) {
+  if (!on)
+    return NRF_ERROR_API_NOT_IMPLEMENTED;
   ret_code_t ret;
   app_usbd_serial_num_generate();
 
@@ -1044,18 +1043,21 @@ void serial_init() {
   APP_ERROR_CHECK(ret);
 
   ret = app_usbd_power_events_enable();
-  APP_ERROR_CHECK(ret);
+  m_serial_active = true;
+  return ret;
 }
 
 //--------------------------------------------------------------------------
 
 ret_code_t enrf_serial_write(const char *str) {
   ret_code_t res = NRF_SUCCESS;
-  for (int i = 0; i < strlen(str); i++) {
-    do {
-      res = app_usbd_cdc_acm_write(&m_app_cdc_acm, str+i, 1);
-      app_usbd_event_queue_process();
-    } while (res == NRF_ERROR_BUSY);
+  if (m_serial_active) {
+    for (int i = 0; i < strlen(str); i++) {
+      do {
+        res = app_usbd_cdc_acm_write(&m_app_cdc_acm, str + i, 1);
+        app_usbd_event_queue_process();
+      } while (res == NRF_ERROR_BUSY);
+    }
   }
   return res;
 }
@@ -1088,30 +1090,40 @@ static void uart_event_handler(app_uart_evt_t *p_event) {
 
 //--------------------------------------------------------------------------
 
-void serial_init() {
-  uint32_t err_code;
-  app_uart_comm_params_t comm_params;
-  comm_params.rx_pin_no = RX_PIN_NUMBER;
-  comm_params.tx_pin_no = TX_PIN_NUMBER;
-  comm_params.flow_control = APP_UART_FLOW_CONTROL_DISABLED;
-  comm_params.use_parity = false;
-  comm_params.baud_rate = UART_BAUD_RATE;
+ret_code_t enrf_serial_enable(bool on) {
+  uint32_t err_code = NRF_SUCCESS;
+  if (on != m_serial_active) {
+    if (on) {
+      app_uart_comm_params_t comm_params;
+      comm_params.rx_pin_no = RX_PIN_NUMBER;
+      comm_params.tx_pin_no = TX_PIN_NUMBER;
+      comm_params.flow_control = APP_UART_FLOW_CONTROL_DISABLED;
+      comm_params.use_parity = false;
+      comm_params.baud_rate = UART_BAUD_RATE;
 
-  APP_UART_FIFO_INIT(&comm_params,
-                      UART_RX_BUF_SIZE,
-                      UART_TX_BUF_SIZE,
-                      uart_event_handler,
-                      APP_IRQ_PRIORITY_LOWEST,
-                      err_code);
-  APP_ERROR_CHECK(err_code);
+      APP_UART_FIFO_INIT(&comm_params,
+                         UART_RX_BUF_SIZE,
+                         UART_TX_BUF_SIZE,
+                         uart_event_handler,
+                         APP_IRQ_PRIORITY_LOWEST,
+                         err_code);
+    } else {
+      nrf_delay_ms(250);
+      err_code = app_uart_close();
+    }
+    m_serial_active = on;
+  }
+  return err_code;
 }
 
 //--------------------------------------------------------------------------
 
 ret_code_t enrf_serial_write(const char *str) {
   ret_code_t err_code = NRF_SUCCESS;
-  for (size_t i = 0; i < strlen(str) && err_code == NRF_SUCCESS; i++)
-    err_code = app_uart_put(str[i]);
+  if (m_serial_active) {
+    for (size_t i = 0; i < strlen(str) && err_code == NRF_SUCCESS; i++)
+      err_code = app_uart_put(str[i]);
+  }
 
   return err_code;
 }
@@ -1121,7 +1133,9 @@ ret_code_t enrf_serial_write(const char *str) {
 
 #else
 
-void serial_init() {
+ret_code_t enrf_serial_enable(bool on) {
+  m_serial_active = on;
+  return NRF_SUCCESS;
 }
 
 //--------------------------------------------------------------------------
