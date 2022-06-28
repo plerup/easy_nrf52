@@ -323,6 +323,7 @@ list_files:
 # == Flashing operations ==
 
 UICR_ADDR = 0x10001000
+MAC_ADDR  = 0x100000A4
 UICR_SIZE = 0x400
 ifeq ($(BOARD),pca10059)
   # Make sure that REGOUT0 is always kept at 3.3V (5),for nrf52840 dongle
@@ -362,12 +363,17 @@ ifeq ($(PROG_HW),segger)
 		$(if $(REGOUT0_ADDR),$(FLASH_COM) --memwr $(REGOUT0_ADDR) --val $(REGOUT0_VAL),)
   endef
   READ_UICR = $(FLASH_COM) --memrd $(UICR_ADDR) --n $(UICR_SIZE)
+  READ_MAC = $(FLASH_COM) --memrd $(MAC_ADDR) --n 8
   RESET_COM = $(FLASH_COM) --reset
   OOCD_CFG = jlink
   OOD_PARAMS = -c "transport select swd"
 else ifeq ($(PROG_HW),stlink)
   POST_FLASH = $(if $(REGOUT0_ADDR),mww 0x4001E504 1; mww $(REGOUT0_ADDR) $(REGOUT0_VAL); mww 0x4001E504 0;,)
   OOCD_CFG = stlink
+  ifdef STLINK_SNR
+    OOCD_COM += -c "hla_serial \"$(STLINK_SNR)\""
+  endif
+
   FLASH_COM ?= $(OOCD_COM)
   FLASH_PROG ?= $(FLASH_COM) -c "program $1 verify; $(POST_FLASH) reset; exit" $(OOCD_TAIL)
   define FLASH_DUMP
@@ -381,8 +387,9 @@ else ifeq ($(PROG_HW),stlink)
 		$(call FLASH_DUMP,$(UICR_BIN),$(UICR_ADDR),$(UICR_SIZE))
 		srec_cat $(UICR_BIN) -binary -offset $(UICR_ADDR) -o $1 -Intel
   endef
-  FLASH_ERASE ?= $(FLASH_COM) -c "init" -c "nrf52.cpu arp_halt; nrf5 mass_erase; $(POST_FLASH) exit" $(OOCD_TAIL)
+  FLASH_ERASE ?= $(FLASH_COM) -c "init; reset halt; targets; nrf5 mass_erase; $(POST_FLASH) exit" $(OOCD_TAIL)
   READ_UICR = $(FLASH_COM) -c "init; mdw $(UICR_ADDR) $(UICR_SIZE)" -c " exit" 2>&1
+  READ_MAC = $(FLASH_COM) -c "init; mdw $(MAC_ADDR) 2" -c " exit" 2>&1
   RESET_COM = $(FLASH_COM) -c "init; reset; exit" $(OOCD_TAIL)
 else
   $(error Unknown programmer)
@@ -445,6 +452,9 @@ erase_flash:
 
 show_uicr:
 	$(READ_UICR) | perl $(TOOLS_DIR)/show_uicr.pl
+
+show_mac:
+	$(READ_MAC) | python $(TOOLS_DIR)/show_mac.py
 
 reset:
 	echo Reset
@@ -564,6 +574,10 @@ endif
 list_segger:
 	$(FLASH_COM) --com
 
+# Show connected stlink units
+list_stlink:
+	st-info --probe | grep openocd
+
 help:
 help:
 	@echo
@@ -596,7 +610,9 @@ help:
 	@echo "  preproc              Run compiler preprocessor on source file"
 	@echo "                         specified via SRC_FILE"
 	@echo "  list_segger          List serial number of all connected Segger interfaces"
+	@echo "  list_stlink          List serial number of all connected stlink interfaces"
 	@echo "  show_uicr            Show changed UICR registers"
+	@echo "  show_mac             Show device mac address"
 	@echo "Some configurable parameters"
 	@echo "For more detailed information check the makefile"
 	@echo "  PROJ_NAME            Main source file"
@@ -619,7 +635,8 @@ help:
 	@echo "  BUILD_THREADS        Number of parallel build threads"
 	@echo "                         Default: Maximum possible, based on number of CPUs"
 	@echo "  USE_CCACHE           Set to 0 to disable ccache when it is available"
-	@echo "  SEGGER_SNR           Required when several Segger unit are present"
+	@echo "  SEGGER_SNR           Required when several Segger units are present"
+	@echo "  STLINK_SNR           Required when several stlink units are present"
 	@echo "  PROG_HW              Flashing and debug hardware interface"
 	@echo "                         segger or stlink"
 	@echo

@@ -160,7 +160,7 @@ foreach (glob("$setup_dir/*")) {
 print "Installing, sudo will be required\n...\n";
 command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
 command("sudo apt update -qq -y >/dev/null 2>&1");
-command("sudo apt install python3-pip srecord openocd libzip-dev -qq -y >/dev/null 2>&1");
+command("sudo apt install python3-pip srecord openocd libzip-dev stlink-tools -qq -y >/dev/null 2>&1");
 command("sudo pip3 -q install nrfutil bleak");
 
 create_command("enrfmake");
