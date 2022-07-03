@@ -411,6 +411,7 @@ static void startup() {
 
 int main() {
   enrf_init("ble_tool", on_ble_evt);
+  enrf_serial_enable(true);
   bsp_init(BSP_INIT_LEDS, NULL);
   startup();
   while (true) {
