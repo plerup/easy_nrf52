@@ -541,7 +541,9 @@ MONITOR_PORT ?= $(DFU_PORT)
 MONITOR_SPEED ?= 115200
 MONITOR_COM ?= python3 -m serial.tools.miniterm -e $(MONITOR_PORT) $(MONITOR_SPEED)
 monitor:
-ifneq ($(UART_LOG),0)
+ifneq ($(ENRF_SERIAL),)
+	$(MONITOR_COM)
+else ifneq ($(UART_LOG),0)
 	$(MONITOR_COM)
 else
 	$(RTT_COM)

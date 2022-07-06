@@ -463,7 +463,17 @@ static void db_disc_handler(ble_db_discovery_evt_t *p_evt) {
 bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
   ret_code_t err_code;
   m_device_name = dev_name;
-  log_init();
+
+  bool do_log = true;
+#ifdef ENRF_ENABLE_LOG_PIN
+  // Log control pin defined, must be low for log to be enabled
+  nrf_gpio_cfg_input(ENRF_ENABLE_LOG_PIN, NRF_GPIO_PIN_PULLUP);
+  nrf_delay_ms(1);
+  do_log = nrf_gpio_pin_read(ENRF_ENABLE_LOG_PIN) == 0;
+  nrf_gpio_cfg_default(ENRF_ENABLE_LOG_PIN);
+#endif
+  if (do_log)
+      log_init();
 #if BLE_DFU_ENABLED == 1
   err_code = ble_dfu_buttonless_async_svci_init();
   APP_ERROR_CHECK(err_code);
