@@ -307,7 +307,7 @@ $(BOOTLOADER_FILE) bootloader: $(COMP_DEP)
 	$(SUB_MAKE) -C $(ENV_ROOT)bootloader OUT_HEX=$(BOOTLOADER_FILE) BUTTONLESS_DFU=0 BUILD_ROOT=$(BUILD_ROOT)/bootloader
 
 # Complete (production) hex file
-ALL_HEX_FILE ?= $(PROJ_NAME)_$(BOARD)_all_$(SRC_GIT_VERSION).hex
+ALL_HEX_FILE ?= $(PROJ_NAME)_$(BOARD)_all_$(PROJ_VERSION).hex
 hex_all:
 	$(SUB_MAKE)
 	$(SUB_MAKE) bootloader
