@@ -457,53 +457,6 @@ static void db_disc_handler(ble_db_discovery_evt_t *p_evt) {
   if (m_disc_cb)
     m_disc_cb(p_evt);
 }
-
-//--------------------------------------------------------------------------
-
-bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
-  ret_code_t err_code;
-  m_device_name = dev_name;
-
-  bool do_log = true;
-#ifdef ENRF_ENABLE_LOG_PIN
-  // Log control pin defined, must be low for log to be enabled
-  nrf_gpio_cfg_input(ENRF_ENABLE_LOG_PIN, NRF_GPIO_PIN_PULLUP);
-  nrf_delay_ms(1);
-  do_log = nrf_gpio_pin_read(ENRF_ENABLE_LOG_PIN) == 0;
-  nrf_gpio_cfg_default(ENRF_ENABLE_LOG_PIN);
-#endif
-  if (do_log)
-      log_init();
-#if BLE_DFU_ENABLED == 1
-  err_code = ble_dfu_buttonless_async_svci_init();
-  APP_ERROR_CHECK(err_code);
-#endif
-  timers_init();
-  power_management_init();
-  ble_stack_init();
-  gap_params_init();
-  gatt_init();
-  services_init();
-  conn_params_init();
-#if SDK_VERSION >= 17
-  ble_db_discovery_init_t db_init;
-  memset(&db_init, 0, sizeof(ble_db_discovery_init_t));
-  db_init.evt_handler = db_disc_handler;
-  db_init.p_gatt_queue = &m_ble_gatt_queue;
-  err_code = ble_db_discovery_init(&db_init);
-#else
-  err_code = ble_db_discovery_init(db_disc_handler);
-#endif
-  APP_ERROR_CHECK(err_code);
-
-  m_app_evt_cb = ble_evt_cb;
-
-  NRF_LOG_INFO("%s, version: %s %s", dev_name, _build_version, _build_time);
-  NRF_LOG_INFO("Mac address: %s", enrf_get_device_address());
-
-  return true;
-}
-
 //--------------------------------------------------------------------------
 
 void enrf_set_phy(bool long_range) {
@@ -927,7 +880,7 @@ void bytes_to_hex(uint8_t *bytes, uint32_t len, char *str) {
 
 #if defined(ENRF_SERIAL_USB) || defined(ENRF_SERIAL_UART)
 
-#define READ_BUFF_SIZE 100
+#define READ_BUFF_SIZE 255
 
 static bool m_input_available = false;
 static size_t m_input_pos = 0;
@@ -1043,18 +996,8 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 ret_code_t enrf_serial_enable(bool on) {
   if (!on)
     return NRF_ERROR_API_NOT_IMPLEMENTED;
-  ret_code_t ret;
-  app_usbd_serial_num_generate();
-
-  ret = app_usbd_init(&m_usbd_config);
-  APP_ERROR_CHECK(ret);
-  app_usbd_class_inst_t const *class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm);
-  ret = app_usbd_class_append(class_cdc_acm);
-  APP_ERROR_CHECK(ret);
-
-  ret = app_usbd_power_events_enable();
   m_serial_active = true;
-  return ret;
+  return NRF_SUCCESS;
 }
 
 //--------------------------------------------------------------------------
@@ -1161,3 +1104,61 @@ size_t enrf_serial_read(char *str, size_t max_length) {
 }
 
 #endif
+
+//--------------------------------------------------------------------------
+
+bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
+  ret_code_t err_code;
+  m_device_name = dev_name;
+
+  bool do_log = true;
+#ifdef ENRF_ENABLE_LOG_PIN
+  // Log control pin defined, must be low for log to be enabled
+  nrf_gpio_cfg_input(ENRF_ENABLE_LOG_PIN, NRF_GPIO_PIN_PULLUP);
+  nrf_delay_ms(1);
+  do_log = nrf_gpio_pin_read(ENRF_ENABLE_LOG_PIN) == 0;
+  nrf_gpio_cfg_default(ENRF_ENABLE_LOG_PIN);
+#endif
+  if (do_log)
+    log_init();
+#if BLE_DFU_ENABLED == 1
+  err_code = ble_dfu_buttonless_async_svci_init();
+  APP_ERROR_CHECK(err_code);
+#endif
+  timers_init();
+
+#ifdef ENRF_SERIAL_USB
+  app_usbd_serial_num_generate();
+  err_code = app_usbd_init(&m_usbd_config);
+  APP_ERROR_CHECK(err_code);
+  app_usbd_class_inst_t const *class_cdc_acm = app_usbd_cdc_acm_class_inst_get(&m_app_cdc_acm);
+  err_code = app_usbd_class_append(class_cdc_acm);
+  APP_ERROR_CHECK(err_code);
+  err_code = app_usbd_power_events_enable();
+  APP_ERROR_CHECK(err_code);
+#endif
+
+  power_management_init();
+  ble_stack_init();
+  gap_params_init();
+  gatt_init();
+  services_init();
+  conn_params_init();
+#if SDK_VERSION >= 17
+  ble_db_discovery_init_t db_init;
+  memset(&db_init, 0, sizeof(ble_db_discovery_init_t));
+  db_init.evt_handler = db_disc_handler;
+  db_init.p_gatt_queue = &m_ble_gatt_queue;
+  err_code = ble_db_discovery_init(&db_init);
+#else
+  err_code = ble_db_discovery_init(db_disc_handler);
+#endif
+  APP_ERROR_CHECK(err_code);
+
+  m_app_evt_cb = ble_evt_cb;
+
+  NRF_LOG_INFO("%s, version: %s %s", dev_name, _build_version, _build_time);
+  NRF_LOG_INFO("Mac address: %s", enrf_get_device_address());
+
+  return true;
+}

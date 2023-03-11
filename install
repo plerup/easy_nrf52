@@ -25,7 +25,7 @@ my $bin_dir = "/usr/local/bin";
 my $gcc_version = "gcc-arm-none-eabi-10.3-2021.10";
 my @tool_list = (
 "https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/$gcc_version-x86_64-linux.tar.bz2",
-"https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/nRF-command-line-tools/sw/Versions-10-x-x/10-15-2/nrf-command-line-tools_10.15.2_amd64.deb",
+"https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/nRF-command-line-tools/sw/Versions-10-x-x/10-15-4/nrf-command-line-tools_10.15.4_amd64.deb",
 );
 
 sub prompt {
@@ -165,6 +165,7 @@ command("sudo pip3 -q install nrfutil bleak");
 
 create_command("enrfmake");
 create_command("enrfuart");
+create_command("ext_nrfuart");
 create_command("enrfscan");
 create_command("enrfpath");
 my $def_priv_key = "$this_dir/bootloader/dev_priv_key.pem";

@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+#====================================================================================
+# Use an external nrf52840 with the program ble_tool loaded for nus communication.
+# This enables use of larger MTU and long range, something that is not available
+# when using Bluez
+#
+# This file is part of easy_nrf52
+# License: LGPL 2.1
+# General and full license information is available at:
+#    https://github.com/plerup/easy_nrf52
+#
+# Copyright (c) 2023 Peter Lerup. All rights reserved.
+#
+#====================================================================================
+
+import sys, time
+
+from serial import Serial
+import argparse
+
+connected = False
+debug = False
+
+def send_string(str, wait_for=None, timeout=3):
+    global connected, debug
+    if debug:
+        print(f"Out: {str}")
+    uart.write((str + "\n").encode())
+    if not wait_for:
+        wait_for = "="
+    uart.timeout = timeout
+    while True:
+        resp = uart.readline().decode().strip()
+        if debug:
+            print("In:", resp)
+        if not resp:
+            print("* Response timeout")
+            raise EOFError
+        if wait_for in resp:
+            return resp[len(wait_for):]
+        if "#DISCONNECTED" in resp:
+            print("* Peripheral has disconnected")
+            connected = False
+            raise EOFError
+
+
+
+parser = argparse.ArgumentParser(description='Nus module')
+parser.add_argument('-p', dest='port', default='/dev/ttyACM0',
+                    help='Serial port')
+parser.add_argument('-b', dest='mac', required=True,
+                    help='Nus server mac address')
+parser.add_argument('-l', dest='long_range', action='store_true',
+                    help='Use long range BLE')
+parser.add_argument('-d', dest='debug', action='store_true',
+                    help='Debug mode')
+args = parser.parse_args()
+
+uart = Serial(port=args.port, baudrate=115200, timeout=3)
+
+try:
+    long_range = 1 if args.long_range else 0
+    debug = args.debug
+    send_string(f"connect;{args.mac};{long_range}", "#CONNECTED", 5)
+    print("Connected")
+    connected = True
+
+    while True:
+        line = input()
+        print(send_string(f"nusc;{line}", "#NUSC:"))
+
+except (KeyboardInterrupt, EOFError):
+    if connected:
+        print("\nDisconnecting...")
+        send_string("disconnect")
+        time.sleep(1)
+    sys.exit(1)
+
+
