@@ -29,3 +29,8 @@ LINKER_SCRIPT = $(or $(BL_MEM_CONF),$(DEF_BL_MEM_CONF))
 DEF_BL_MEM_CONF = $(BUILD_ROOT)/mem_conf.ld
 SRC_FILES += $(PUB_KEY_FILE)
 NO_ENRF = 1
+
+# No secure bootloader template exists for nrf52840 dongle, set bootloader button pin
+ifeq ($(BOARD),pca10059)
+  CFLAGS += -DNRF_BL_DFU_ENTER_METHOD_BUTTON_PIN=BUTTON_1
+endif
