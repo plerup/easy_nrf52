@@ -10,7 +10,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2023 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -674,6 +674,8 @@ ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_
     nus_init = true;
   }
   m_is_central = true;
+  m_scan_params.extended = m_long_range ? 1 : 0;
+  m_scan_params.scan_phys = m_long_range ? BLE_GAP_PHY_CODED : BLE_GAP_PHY_AUTO;
   return sd_ble_gap_connect(addr, &m_scan_params, &m_connection_param, APP_BLE_CONN_CFG_TAG);
 }
 

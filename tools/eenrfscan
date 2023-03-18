@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+#====================================================================================
+# BLE scanner using external module with ble_tool
+#
+# This file is part of easy_nrf52
+# License: LGPL 2.1
+# General and full license information is available at:
+#    https://github.com/plerup/easy_nrf52
+#
+# Copyright (c) 2023 Peter Lerup. All rights reserved.
+#
+#====================================================================================
+
+import argparse
+from ext_ble_tool import init, read_string, send_string, run
+
+dev_list = dict()
+
+def scanner():
+    send_string(f"scan;;0;{args.long_range};{args.active}")
+    while True:
+        resp = read_string()
+        if resp.startswith("#SCAN"):
+            info = resp[6:]
+            show = args.match.lower() in info.lower() if args.case else args.match in info
+            if show:
+                elem = info.split(';')
+                addr = elem[0]
+                data = elem[1:2]
+                if not addr in dev_list or dev_list[addr] != data:
+                    print(info)
+                    dev_list[addr] = data
+
+
+parser = argparse.ArgumentParser(description='BLE scanner')
+parser.add_argument('-m', dest='match', default='',
+                    help='Only show entries matching this')
+parser.add_argument('-i', dest='case', action='store_true',
+                    help='Case insensitive match')
+parser.add_argument('-a', dest='active',
+                    default=0, action='store_const', const=1,
+                    help='Active scan')
+
+args = init(parser)
+if args:
+    run(scanner)

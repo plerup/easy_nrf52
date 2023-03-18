@@ -9,7 +9,7 @@
 # General and full license information is available at:
 #    https://github.com/plerup/easy_nrf52
 #
-# Copyright (c) 2022 Peter Lerup. All rights reserved.
+# Copyright (c) 2022-2023 Peter Lerup. All rights reserved.
 #
 #====================================================================================
 
@@ -160,13 +160,29 @@ foreach (glob("$setup_dir/*")) {
 print "Installing, sudo will be required\n...\n";
 command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
 command("sudo apt update -qq -y >/dev/null 2>&1");
-command("sudo apt install python3-pip srecord openocd libzip-dev stlink-tools -qq -y >/dev/null 2>&1");
-command("sudo pip3 -q install nrfutil bleak");
+command("sudo apt install python3-pip srecord openocd libzip-dev stlink-tools curl -qq -y >/dev/null 2>&1");
+command("sudo pip3 -qq install nrfutil bleak");
+if (!`which JLinkConfig`) {
+  my $jlink_deb = "/tmp/JLink_Linux_x86_64.deb";
+  command("curl -s -X POST https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.deb " .
+    "-H \"Content-Type: application/x-www-form-urlencoded\" " .
+    "-d \"accept_license_agreement=accepted\" >$jlink_deb");
+  command("sudo apt install $jlink_deb -qq -y >/dev/null 2>&1");
+}
+if (`which code`) {
+  command("code --install-extension marus25.cortex-debug >/dev/null")
+}
+# Fix for Ubuntu 22.04 which does not have libzip 5
+my $libzip_dir = "/usr/lib/x86_64-linux-gnu";
+if (!-e "$libzip_dir/libzip.so.5") {
+  command("sudo ln -sf $libzip_dir/libzip.so.4 $libzip_dir/libzip.so.5");
+}
 
 create_command("enrfmake");
 create_command("enrfuart");
-create_command("ext_nrfuart");
+create_command("eenrfuart");
 create_command("enrfscan");
+create_command("eenrfscan");
 create_command("enrfpath");
 my $def_priv_key = "$this_dir/bootloader/dev_priv_key.pem";
 command("nrfutil keys generate $def_priv_key") unless -f $def_priv_key;
@@ -177,11 +193,5 @@ string_to_file("$ENV{'HOME'}/.$env_name.install",
 
 print "\n";
 print "==== Installation completed ==== \n";
-print "* PLEASE NOTE! *\n";
-print "In order to use boards with Segger modules you have to manually install the JLink software from:\n";
-print "  https://www.segger.com/downloads/jlink/\n";
-print "For debugging in Visual Studio, the Cortex-debug module must be installed from:\n";
-print "  https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug\n";
-print "\n";
 
 

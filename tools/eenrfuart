@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+#====================================================================================
+# Nordic Uart Service client using external module with ble_tool
+#
+# This file is part of easy_nrf52
+# License: LGPL 2.1
+# General and full license information is available at:
+#    https://github.com/plerup/easy_nrf52
+#
+# Copyright (c) 2023 Peter Lerup. All rights reserved.
+#
+#====================================================================================
+
+from ext_ble_tool import init, send_string, run
+import argparse
+
+def nus_client():
+    send_string(f"connect;{args.mac};{args.long_range}", "#CONNECTED", 5)
+    print("Connected")
+
+    while True:
+        line = input()
+        print(send_string(f"nusc;{line}", "#NUSC:"))
+
+
+parser = argparse.ArgumentParser(description='Nus client')
+parser.add_argument('-b', dest='mac', required=True,
+                    help='Nus server mac address')
+
+args = init(parser)
+if args:
+    run(nus_client)

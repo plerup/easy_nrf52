@@ -204,3 +204,11 @@ The installation makes some other tools available as well on a PC with Bluetooth
 **enrfscan** This command scans and lists all advertising Bluetooth low energy devices. Filtering can be made my supplying a match string. Advertising data will be shown together with address and rssi value.
 
 **enrfuart** This implements a Nordic uart service client and can be used to connect to units with this service enabled e.g. the easy_nrf52 examples
+
+If you flash the example application *ble_tool* onto a nrf52840 module, e.g. the Nordic dongle pca10059, you can use this in the same way as the command above. But in this case extended MTU and long range (PHY_CODED) can be used as well. the following predefined commands are available for this setup:
+
+**eenrfscan** Same as above but with option for long range.
+
+**eeenrfuart** Has 256 MTU and long range option.
+
+Use *--help* for full description of the available options for the commands.

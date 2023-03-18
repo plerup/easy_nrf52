@@ -12,7 +12,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2023 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -310,6 +310,34 @@ static void write(uint8_t op) {
 
 //--------------------------------------------------------------------------
 
+static void led() {
+  unsigned long led_no = strtoul(m_params[0], NULL, 10);
+  SET_LED(led_no, strtoul(m_params[1], NULL, 10));
+}
+
+//--------------------------------------------------------------------------
+
+static void bsp_event_handler(bsp_event_t event) {
+  // Start or stop advertisement based on button press
+  static bool is_advertising = false;
+  switch (event) {
+    case BSP_EVENT_KEY_0:
+      if (is_advertising) {
+        enrf_stop_advertise();
+      } else {
+        enrf_start_advertise(true, 0, BLE_ADVDATA_FULL_NAME, NULL, 0, 100, 0, NULL);
+      }
+      is_advertising = !is_advertising;
+      SET_LED(BSP_BOARD_LED_0, is_advertising);
+      break;
+
+    default:
+      break;
+  }
+}
+
+//--------------------------------------------------------------------------
+
 const char *m_help =
     "\n=== ble_tool ===\n"
     "Syntax: command[;param]+\n"
@@ -342,6 +370,8 @@ const char *m_help =
     "  restart                   Restart unit with possible dfu mode\n"
     "    param: 1|0\n"
     "  mac                       Show unit mac address\n"
+    "  led                       Turn on or off led\n"
+    "    params: led_no;on\n"
     "";
 #define CMD_EQ(str) ((strcasecmp(m_command, str) == 0))
 
@@ -392,6 +422,9 @@ static void handle_command() {
     enrf_restart(BOOL_PARAM(0));
   } else if (CMD_EQ("mac")) {
     CMD_OK("%s", enrf_get_device_address());
+  } else if (CMD_EQ("led") && m_param_cnt > 1) {
+    led();
+    CMD_OK("");
   } else {
     RESP_ERROR("Invalid command: \"%s\" Type help for listing", m_command);
   }
@@ -412,7 +445,7 @@ static void startup() {
 int main() {
   enrf_init("ble_tool", on_ble_evt);
   enrf_serial_enable(true);
-  bsp_init(BSP_INIT_LEDS, NULL);
+  bsp_init(BSP_INIT_BUTTONS | BSP_INIT_LEDS, bsp_event_handler);
   startup();
   while (true) {
     enrf_wait_for_event();
