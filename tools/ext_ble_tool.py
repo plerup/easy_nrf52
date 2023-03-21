@@ -107,14 +107,17 @@ def run(cmd):
         cmd()
 
     except (KeyboardInterrupt, EOFError):
-        send_string(f"led;{indicator_led};0")
-        if connected:
-            print("\nDisconnecting...")
-            send_string("disconnect")
-            time.sleep(0.5)
-        elif connecting:
-            send_string("cancel_connect")
-        send_string("scan;")
+        try:
+            send_string(f"led;{indicator_led};0")
+            if connected:
+                print("\nDisconnecting...")
+                send_string("disconnect")
+                time.sleep(0.5)
+            elif connecting:
+                send_string("cancel_connect")
+            send_string("scan;")
+        except Exception as e:
+            pass
 
     except (SerialException):
         err_mess("Serial port error")

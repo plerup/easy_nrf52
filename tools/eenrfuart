@@ -15,7 +15,7 @@ from ext_ble_tool import init, send_string, run
 import argparse
 
 def nus_client():
-    send_string(f"connect;{args.mac};{args.long_range}", "#CONNECTED", 5)
+    send_string(f"connect;{args.mac};{args.long_range}", "#CONNECTED", int(args.timeout))
     print("Connected")
 
     while True:
@@ -26,6 +26,8 @@ def nus_client():
 parser = argparse.ArgumentParser(description='Nus client')
 parser.add_argument('-b', dest='mac', required=True,
                     help='Nus server mac address')
+parser.add_argument('-t', dest='timeout', default=25,
+                    help='Connect timeout in seconds')
 
 args = init(parser)
 if args:
