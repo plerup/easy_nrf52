@@ -11,16 +11,26 @@
 #
 #====================================================================================
 
-from ext_ble_tool import init, send_string, run
-import argparse
+from ext_ble_tool import init, in_waiting, send_string, read_string, run
+import argparse, time
 
 def nus_client():
     send_string(f"connect;{args.mac};{args.long_range}", "#CONNECTED", int(args.timeout))
     print("Connected")
 
     while True:
-        line = input()
-        print(send_string(f"nusc;{line}", "#NUSC:"))
+        line = input("> ")
+        if line:
+            send_string(f"nusc;{line}")
+            while True:
+                line = read_string()
+                if args.debug:
+                    print("In:", line)
+                if "#NUSC" in line:
+                    print(line[6:])
+                time.sleep(0.01)
+                if not in_waiting():
+                    break
 
 
 parser = argparse.ArgumentParser(description='Nus client')

@@ -35,7 +35,12 @@ def read_string():
 
 #--------------------------------------------------------------------
 
-def send_string(str, wait_for=None, timeout=3):
+def in_waiting():
+    return uart.in_waiting
+
+#--------------------------------------------------------------------
+
+def send_string(str, wait_for=None, timeout=3, ignore_err=False):
     global connecting, connected
     if args.debug:
         print(f"Out: {str}")
@@ -64,8 +69,11 @@ def send_string(str, wait_for=None, timeout=3):
         if "#CONNECTED" in resp:
             connected = True
         if resp[0] == "*":
-            print(resp)
-            raise EOFError
+            if ignore_err:
+                return
+            else:
+                print(resp)
+                raise EOFError
 
 #--------------------------------------------------------------------
 
@@ -87,6 +95,7 @@ def init(parser):
 
     try:
         uart = Serial(port=args.port, baudrate=115200, timeout=3)
+        send_string("disconnect", ignore_err=True)
         send_string('vers')
         send_string(f"led;{indicator_led};1")
         ok = True
