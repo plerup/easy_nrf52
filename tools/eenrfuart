@@ -12,25 +12,36 @@
 #====================================================================================
 
 from ext_ble_tool import init, in_waiting, send_string, read_string, run
+import sys, select
 import argparse, time
+
+
+def input_avail():
+    return (select.select([sys.stdin], [], [], 0.1))[0]
+
 
 def nus_client():
     send_string(f"connect;{args.mac};{args.long_range}", "#CONNECTED", int(args.timeout))
     print("Connected")
 
+    input = ""
     while True:
-        line = input("> ")
-        if line:
-            send_string(f"nusc;{line}")
-            while True:
-                line = read_string()
-                if args.debug:
-                    print("In:", line)
-                if "#NUSC" in line:
-                    print(line[6:])
-                time.sleep(0.01)
-                if not in_waiting():
-                    break
+        if input_avail():
+            input = sys.stdin.readline()
+            if not len(input):
+                raise EOFError
+            input = input.rstrip()
+            if len(input):
+                send_string(f"nusc;" + input)
+            else:
+                print("* Enter a non empty command string")
+        elif in_waiting():
+            while in_waiting():
+                resp = read_string()
+                if "#NUSC" in resp:
+                    print(resp[6:])
+        else:
+            time.sleep(0.1)
 
 
 parser = argparse.ArgumentParser(description='Nus client')

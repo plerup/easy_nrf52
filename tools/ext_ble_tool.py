@@ -31,12 +31,37 @@ def err_mess(mess):
 #--------------------------------------------------------------------
 
 def read_string():
-    return uart.readline().decode().strip()
+    global connecting, connected
+    start = time.time()
+    try:
+        resp = uart.readline().decode().strip()
+    except Exception as e:
+        raise SerialException
+
+    if args.debug:
+        print("In:", resp)
+    if time.time()-start > uart.timeout:
+        err_mess("Response timeout")
+        raise EOFError
+    if "#CONNECTED" in resp:
+        connecting = False
+        connected = True
+    if "#DISCONNECTED" in resp:
+        err_mess("Peripheral has disconnected")
+        connected = False
+        raise EOFError
+
+    return resp
+
 
 #--------------------------------------------------------------------
 
 def in_waiting():
-    return uart.in_waiting
+    try:
+        return uart.in_waiting
+    except Exception as e:
+        raise SerialException
+
 
 #--------------------------------------------------------------------
 
@@ -52,22 +77,8 @@ def send_string(str, wait_for=None, timeout=3, ignore_err=False):
         connecting = True
     while True:
         resp = read_string()
-        if args.debug:
-            print("In:", resp)
-        if not resp:
-            err_mess("Response timeout")
-            raise EOFError
-        if "#CONNECTED" in resp:
-            connecting = False
-            connected = True
         if wait_for in resp:
             return resp[len(wait_for):]
-        if "#DISCONNECTED 0x8" in resp:
-            err_mess("Peripheral has disconnected")
-            connected = False
-            raise EOFError
-        if "#CONNECTED" in resp:
-            connected = True
         if resp[0] == "*":
             if ignore_err:
                 return
@@ -96,6 +107,7 @@ def init(parser):
     try:
         uart = Serial(port=args.port, baudrate=115200, timeout=3)
         send_string("disconnect", ignore_err=True)
+        send_string("scan;", ignore_err=True)
         send_string('vers')
         send_string(f"led;{indicator_led};1")
         ok = True
@@ -123,10 +135,9 @@ def run(cmd):
                 send_string("disconnect")
                 time.sleep(0.5)
             elif connecting:
-                send_string("cancel_connect")
-            send_string("scan;")
+                send_string("cancel_connect", ignore_err=True)
         except Exception as e:
-            pass
+            sys.exit(1)
 
     except (SerialException):
         err_mess("Serial port error")
