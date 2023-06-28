@@ -14,11 +14,11 @@
 use strict;
 
 my $offset = 0x20000000;
-my $ram_reduc = shift;
+my $ram_reduc = hex(shift);
 open(my $f, shift) || die "Failed to open linker file\n";
 while (<$f>) {
   if (/^\s+RAM\s+.+ORIGIN\s*=\s*(\S+),\s*LENGTH\s*=\s*(\S+)/) {
-    my $ram_size = $1+$2-$offset;
+    my $ram_size = hex($1)+hex($2)-$offset;
     print sprintf("  RAM (rwx) :  ORIGIN = 0x%X, LENGTH = 0x%X\n", $offset+$ram_reduc, $ram_size-$ram_reduc);
   } else {
     print;
