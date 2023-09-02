@@ -578,7 +578,7 @@ list_segger:
 
 # Show connected stlink units
 list_stlink:
-	st-info --probe | grep openocd
+	st-info --probe | perl -e 'while (<>) { next unless s/\s+serial:\s+//; s/(\w\w)/\\x$$1/g; print; }'
 
 help:
 help:

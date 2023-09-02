@@ -164,6 +164,8 @@ insert_or_replace("$config_dir/tasks.json", '{"version": "2.0.0", "tasks": []}',
 
 
 # == Add debug launcher
+my $server_type = $dbg_int;
+$server_type = "openocd" if $dbg_int =~ /stlink/;
 my $json = <<"EOT";
 {
   "name": "$name",
@@ -173,10 +175,10 @@ my $json = <<"EOT";
   "request": "launch",
   "type": "cortex-debug",
   "runToEntryPoint": "main",
-  "servertype": "$dbg_int",
+  "servertype": "$server_type",
   "configFiles": [
     "interface/$dbg_int.cfg",
-    "nrf52.cfg"
+    "target/nrf52.cfg"
   ],
   "device": "nrf52",
   "interface": "swd",
