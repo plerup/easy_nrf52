@@ -331,6 +331,10 @@ ifeq ($(BOARD),pca10059)
   REGOUT0_VAL = 0xFFFFFFFD
 endif
 
+FLASH_FILE ?= nrf_flash.hex
+FLASH_FILE_IS_HEX := $(if $(findstring .hex,$(suffix $(FLASH_FILE))),1,)
+FLASH_DUMP_FILE = $(BUILD_ROOT)/flash.bin
+
 # Openocd is used for stlink programmer and gdb
 OOCD_COM = openocd -f interface/$(OOCD_CFG).cfg $(OOD_PARAMS) -f target/nrf52.cfg
 OOCD_LOG = /tmp/$(ENV_NAME)_openocd.log
@@ -350,14 +354,6 @@ ifeq ($(PROG_HW),segger)
   	-pkill JLinkGDBServer
   endef
   FLASH_PROG = $(FLASH_COM) --sectorerase --program $1 --reset
-  define FLASH_DUMP
-		$(FLASH_COM) --readcode $1
-		srec_cat $1 -Intel -crop $(DUMP_ADDR) $(call calc,$(2)+$(3)) -o $1 -Intel
-  endef
-  define UICR_DUMP
-		$(FLASH_COM) --readuicr $1
-		srec_cat $1 -Intel -crop $(UICR_ADDR) $(call calc,$(UICR_ADDR)+$(UICR_SIZE)) -o $1 -Intel
-  endef
   define FLASH_ERASE
   	$(FLASH_COM) --eraseall
 		$(if $(REGOUT0_ADDR),$(FLASH_COM) --memwr $(REGOUT0_ADDR) --val $(REGOUT0_VAL),)
@@ -376,17 +372,6 @@ else ifeq ($(PROG_HW),stlink)
 
   FLASH_COM ?= $(OOCD_COM)
   FLASH_PROG ?= $(FLASH_COM) -c "program $1 verify; $(POST_FLASH) reset; exit" $(OOCD_TAIL)
-  define FLASH_DUMP
-		$(eval FLASH_BIN = $(BUILD_ROOT)/flash.bin)
-		$(FLASH_COM) -c "init; dump_image $(FLASH_BIN) $2 $3; exit" $(OOCD_TAIL)
-		srec_cat $(FLASH_BIN) -binary -o $1 -Intel
-		-rm $(FLASH_BIN)
-  endef
-  define UICR_DUMP
-		$(eval UICR_BIN = $(BUILD_ROOT)/uicr.bin)
-		$(call FLASH_DUMP,$(UICR_BIN),$(UICR_ADDR),$(UICR_SIZE))
-		srec_cat $(UICR_BIN) -binary -offset $(UICR_ADDR) -o $1 -Intel
-  endef
   FLASH_ERASE ?= $(FLASH_COM) -c "init; reset halt; targets; nrf5 mass_erase; $(POST_FLASH) exit" $(OOCD_TAIL)
   READ_UICR = $(FLASH_COM) -c "init; mdw $(UICR_ADDR) $(UICR_SIZE)" -c " exit" 2>&1
   READ_MAC = $(FLASH_COM) -c "init; mdw $(MAC_ADDR) 2" -c " exit" 2>&1
@@ -429,21 +414,32 @@ flash_all:
 	$(SUB_MAKE) flash_bootloader
 	$(SUB_MAKE) flash
 
-FLASH_FILE ?= nrf_flash.hex
 flash_file:
 	$(call WRITE_FILE_TO_FLASH,$(FLASH_FILE))
 
+bin_to_hex:
+	srec_cat $(FLASH_FILE) -binary -o $(basename $(FLASH_FILE)).hex -Intel
+
+DUMP_ADDR ?= 0
+DUMP_SIZE ?= $(FLASH_SIZE)
+DUMP_COM = $(OOCD_COM) -c "init; dump_image $(FLASH_DUMP_FILE)
 dump_flash: $(BUILD_ROOT)
-	$(eval DUMP_ADDR ?= 0)
-	$(eval DUMP_SIZE ?= $(FLASH_SIZE))
 	echo Saving flash to: \"$(FLASH_FILE)\" \($(DUMP_ADDR) - $(DUMP_SIZE)\)...
-	$(call FLASH_DUMP,$(FLASH_FILE),$(DUMP_ADDR),$(DUMP_SIZE))
-ifndef NO_UICR
-	echo Adding UICR \($(UICR_ADDR) - $(UICR_SIZE)\)...
-	$(eval UICR_FILE = $(BUILD_ROOT)/uicr.hex)
-	$(call UICR_DUMP,$(UICR_FILE))
-	srec_cat $(FLASH_FILE) -Intel $(UICR_FILE) -Intel -o $(FLASH_FILE) -Intel
-	-rm $(UICR_FILE)
+	$(DUMP_COM) $(DUMP_ADDR) $(DUMP_SIZE); exit" $(OOCD_TAIL)
+ifeq ($(FLASH_FILE_IS_HEX),1)
+	srec_cat $(FLASH_DUMP_FILE) -binary -offset $(DUMP_ADDR) -o $(FLASH_FILE) -Intel
+else
+	mv $(FLASH_DUMP_FILE) $(FLASH_FILE)
+endif
+ifeq ($(DUMP_ADDR),0)
+  ifeq ($(FLASH_FILE_IS_HEX),1)
+		echo Adding UICR \($(UICR_ADDR) - $(UICR_SIZE)\)...
+		$(DUMP_COM) $(UICR_ADDR) $(UICR_SIZE); exit" $(OOCD_TAIL)
+		srec_cat $(FLASH_FILE) -Intel $(FLASH_DUMP_FILE) -binary -offset $(UICR_ADDR) -o $(FLASH_FILE) -Intel
+  else
+		echo "* UICR not added to binary dump file"
+  endif
+	-rm $(FLASH_DUMP_FILE)
 endif
 
 erase_flash:

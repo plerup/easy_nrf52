@@ -12,6 +12,7 @@ import asyncio
 import sys
 
 from bleak import BleakScanner
+from bleak.exc import BleakDBusError
 from bleak.backends.scanner import AdvertisementData
 from bleak.backends.device import BLEDevice
 
@@ -28,7 +29,8 @@ async def do_scan(match):
         if not device.address in dev_list:
             dev_list[device.address] = ""
         if (len(match) == 0 or match in info) and dev_list[device.address] != info:
-            print(info + ";" + str(device.rssi))
+            rssi = adv.rssi if hasattr(adv, "rssi") else device.rssi
+            print(info + ";" + str(rssi))
         dev_list[device.address] = info
         return False
 
@@ -39,6 +41,9 @@ async def do_scan(match):
 if __name__ == "__main__":
     try:
         asyncio.run(do_scan("" if len(sys.argv) < 2 else str(sys.argv[1])))
+    except BleakDBusError:
+        print("Internal bus error")
+        pass
     except KeyboardInterrupt:
         print()
         pass
