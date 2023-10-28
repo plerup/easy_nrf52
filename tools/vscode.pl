@@ -89,7 +89,7 @@ sub insert_or_replace {
 my %opts;
 getopts('n:m:w:d:i:p:o:b:', \%opts);
 my $name = $opts{n} || "Linux";
-my $make_com = $opts{m} || "espmake";
+my $make_com = $opts{m} || "enrfmake";
 $workspace_dir = $opts{w};
 my $proj_file = $opts{p};
 my $cwd = $opts{d} || getcwd;
@@ -141,9 +141,11 @@ insert_or_replace("$config_dir/c_cpp_properties.json", '{"version": 4, "configur
                   $json, 'configurations', 'name');
 
 # == Add build tasks
-$json = <<"EOT";
+my $task_file_name = "$config_dir/tasks.json";
+unlink($task_file_name);
+my $task_txt = <<"EOT";
 {
-  "label": "$name",
+  "label": "None",
   "type": "shell",
   "command": "$make_com",
   "options": {"cwd": "$cwd"},
@@ -151,17 +153,26 @@ $json = <<"EOT";
   "group": "build"
 }
 EOT
+my $task_ref = decode_json($task_txt);
 # Normal build task
-insert_or_replace("$config_dir/tasks.json", '{"version": "2.0.0", "tasks": []}',
-                  $json, 'tasks', 'label', 'group');
-# Debug task
-$json =~ s/(\"$name)/${1}_debug/;
-my $debug_op = "DEBUG=1";
-$debug_op = "" if $make_com =~ /$debug_op/;
-$json =~ s/(\"$make_com)/${1} $debug_op build_flash/;
-insert_or_replace("$config_dir/tasks.json", '{"version": "2.0.0", "tasks": []}',
-                  $json, 'tasks', 'label', 'group');
-
+$$task_ref{'label'} = "$name:Build";
+insert_or_replace($task_file_name, '{"version": "2.0.0", "tasks": []}',
+                  encode_json($task_ref), 'tasks', 'label', 'group');
+# Debug build task
+$$task_ref{'label'} = "$name:Build Debug";
+$$task_ref{'command'} = "$make_com DEBUG=1";
+insert_or_replace($task_file_name, '{"version": "2.0.0", "tasks": []}',
+                  encode_json($task_ref), 'tasks', 'label', 'group');
+# Clean build task
+$$task_ref{'label'} = "$name:Clean";
+$$task_ref{'command'} = "$make_com clean";
+insert_or_replace($task_file_name, '{"version": "2.0.0", "tasks": []}',
+                  encode_json($task_ref), 'tasks', 'label', 'group');
+# Flash build task
+$$task_ref{'label'} = "$name:Flash";
+$$task_ref{'command'} = "$make_com flash";
+insert_or_replace($task_file_name, '{"version": "2.0.0", "tasks": []}',
+                  encode_json($task_ref), 'tasks', 'label', 'group');
 
 # == Add debug launcher
 my $server_type = $dbg_int;
