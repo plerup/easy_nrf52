@@ -174,6 +174,11 @@ $$task_ref{'command'} = "$make_com flash";
 insert_or_replace($task_file_name, '{"version": "2.0.0", "tasks": []}',
                   encode_json($task_ref), 'tasks', 'label', 'group');
 
+$$task_ref{'label'} = "$name:Build Flash Debug";
+$$task_ref{'command'} = "$make_com DEBUG=1 build_flash";
+insert_or_replace($task_file_name, '{"version": "2.0.0", "tasks": []}',
+                  encode_json($task_ref), 'tasks', 'label', 'group');
+
 # == Add debug launcher
 my $server_type = $dbg_int;
 $server_type = "openocd" if $dbg_int =~ /stlink/;
@@ -193,7 +198,7 @@ my $json = <<"EOT";
   ],
   "device": "nrf52",
   "interface": "swd",
-  "preLaunchTask": "${name}_debug"
+  "preLaunchTask": "${name}:Build Flash Debug"
 }
 EOT
 insert_or_replace("$config_dir/launch.json", '{"version": "0.2.0", "configurations": []}',
