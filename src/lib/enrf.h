@@ -9,7 +9,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -31,7 +31,6 @@
 #include "bsp_btn_ble.h"
 
 #include "build_info.h"
-
 
 #define SET_LED(led, on) if (on) bsp_board_led_on(led); else bsp_board_led_off(led);
 
@@ -75,10 +74,12 @@ void enrf_set_scan_par(uint16_t scan_int, uint16_t scan_wind);
 ret_code_t enrf_start_scan(scan_report_cb_t report_cb, uint32_t timeout_s, bool active);
 ret_code_t enrf_stop_scan();
 // Get the data of the first one of the specified fields in an advertisement package
-uint8_t enrf_adv_parse(ble_gap_evt_adv_report_t *p_adv_report, uint8_t start_tag, uint8_t end_tag, uint8_t *dest, uint8_t dest_len);
+uint8_t enrf_adv_parse(ble_gap_evt_adv_report_t *p_adv_report, uint8_t start_tag, uint8_t end_tag,
+                       uint8_t *dest, uint8_t dest_len);
 
 // Set parameters for next connection
-void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint16_t slave_latency, float sup_timeout_ms);
+void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint16_t slave_latency,
+                                float sup_timeout_ms);
 // Connect and optionally initiate as a Nordic UART client
 ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_cb_t nus_c_rx_cb);
 // Enable notifications on the specified characteristics cccd handle

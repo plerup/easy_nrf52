@@ -9,7 +9,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -48,6 +48,7 @@ void bsp_event_handler(bsp_event_t event) {
 int main() {
   enrf_init("Advertiser", NULL);
   bsp_init(BSP_INIT_BUTTONS | BSP_INIT_LEDS, bsp_event_handler);
-  while (true)
+  while (true) {
     enrf_wait_for_event();
+  }
 }

@@ -9,7 +9,7 @@
 # General and full license information is available at:
 #    https://github.com/plerup/easy_nrf52
 #
-# Copyright (c) 2022 Peter Lerup. All rights reserved.
+# Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 #
 #====================================================================================
 
@@ -255,7 +255,7 @@ OUT_BIN = $(OUT_PATH).bin
 BUILD_INFO = $(OBJ_DIR)/_build_info.c.o
 DEB_INFO = $(if $(DEBUG),-D,)
 BUILD_TIME = $(shell date +"%F %T")
-BUILD_VERSION = "$(PROJ_VERSION)$(BUILD_VERSION_TAIL) \($(ENV_VERSION)-$(FULL_SDK_VERSION)$(DEB_INFO)\)"
+BUILD_VERSION = "$(BUILD_VERSION_HEADER)$(PROJ_VERSION)$(BUILD_VERSION_TAIL) \($(ENV_VERSION)-$(FULL_SDK_VERSION)$(DEB_INFO)\)"
 
 $(OUT_HEX): $(OBJ_FILES) $(LINKER_SCRIPT)
 	echo "Linking: $@ ($(CHIP))"
@@ -303,10 +303,8 @@ $(BOOTLOADER_SETTINGS) bootloader_settings: $(OUT_HEX)
 BOOTLOADER_FILE ?= $(BUILD_ROOT)/bootloader_$(BL_TYPE)_$(BL_COM).hex
 BOOTLOADER_DIR ?= $(ENV_ROOT)bootloader
 $(BOOTLOADER_FILE) bootloader: $(COMP_DEP)
-	$(eval export BOARD TEMPLATE_BOARD BL_TYPE BL_COM BL_TEMPLATE_MAKE BL_SDK_CONFIG \
-	              BOARDS_DIR BL_PROJ_MAIN BL_MEM_CONF PRIV_KEY_FILE PUB_KEY_FILE)
 	echo "Building bootloader ($(BL_TYPE), $(BL_COM))"
-	$(SUB_MAKE) -C $(BOOTLOADER_DIR) OUT_HEX=$(BOOTLOADER_FILE) BUTTONLESS_DFU=0 BUILD_ROOT=$(BUILD_ROOT)/bootloader
+	$(SUB_MAKE) -C $(BOOTLOADER_DIR) OUT_HEX=$(BOOTLOADER_FILE) BUTTONLESS_DFU=0 BUILD_ROOT=$(BUILD_ROOT)/bootloader ENRF_SERIAL=""
 
 # Complete (production) hex file
 ALL_HEX_FILE ?= $(PROJ_NAME)_$(BOARD)_all_$(PROJ_VERSION).hex
@@ -391,8 +389,10 @@ LAST_FLASH = $(BUILD_ROOT)/last_flash
 
 flash:
 	$(SUB_MAKE)
+ifndef NO_BOOTLOADER
 	$(SUB_MAKE) bootloader_settings
 	$(call WRITE_FILE_TO_FLASH,$(BOOTLOADER_SETTINGS))
+endif
 	$(call WRITE_FILE_TO_FLASH,$(OUT_HEX))
 	touch $(LAST_FLASH)
 
@@ -404,11 +404,15 @@ build_flash:
 	$(SUB_MAKE) $(LAST_FLASH)
 
 flash_softdevice: $(SOFTDEVICE)
+ifndef NO_SOFTDEVICE
 	$(call WRITE_FILE_TO_FLASH,$<)
+endif
 
 flash_bootloader:
+ifndef NO_BOOTLOADER
 	$(SUB_MAKE) bootloader
 	$(call WRITE_FILE_TO_FLASH,$(BOOTLOADER_FILE))
+endif
 
 flash_all:
 	$(SUB_MAKE) erase_flash
@@ -639,4 +643,6 @@ help:
 	@echo "  STLINK_SNR           Required when several stlink units are present"
 	@echo "  PROG_HW              Flashing and debug hardware interface"
 	@echo "                         segger or stlink"
+	@echo "  NO_BOOTLOADER        When defined no bootloader will be built or flashed"
+	@echo "  NO_SOFTDEVICE        When defined the softdevice will not be flashed"
 	@echo

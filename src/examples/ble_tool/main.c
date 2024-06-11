@@ -12,7 +12,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022-2023 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -73,8 +73,9 @@ static bool nus_data_received(uint8_t *data, uint32_t length) {
   strlcpy(m_char_buff, (const char*)data, MIN(sizeof(m_char_buff), length));
   char *end_pos = m_char_buff + strlen(m_char_buff) - 1;
   // Trim possible trailing newline
-  if (*end_pos == '\n')
+  if (*end_pos == '\n') {
     *end_pos = 0;
+  }
   RESP_ASYNC("NUS:%s", m_char_buff);
   return false;
 }
@@ -103,17 +104,20 @@ static void on_ble_evt(const ble_evt_t *p_ble_evt, void *p_context) {
 
     case BLE_GATTC_EVT_WRITE_RSP:
       RESP_ASYNC("WRITE_RESP:%X,%s", p_ble_evt->evt.gattc_evt.params.write_rsp.handle,
-                 hex_str((uint8_t *)p_ble_evt->evt.gattc_evt.params.write_rsp.data, p_ble_evt->evt.gattc_evt.params.write_rsp.len));
+                 hex_str((uint8_t *)p_ble_evt->evt.gattc_evt.params.write_rsp.data,
+                         p_ble_evt->evt.gattc_evt.params.write_rsp.len));
       break;
 
     case BLE_GATTC_EVT_READ_RSP:
       RESP_ASYNC("READ_RESP:%X,%s", p_ble_evt->evt.gattc_evt.params.read_rsp.handle,
-                 hex_str((uint8_t *)p_ble_evt->evt.gattc_evt.params.read_rsp.data, p_ble_evt->evt.gattc_evt.params.read_rsp.len));
+                 hex_str((uint8_t *)p_ble_evt->evt.gattc_evt.params.read_rsp.data,
+                         p_ble_evt->evt.gattc_evt.params.read_rsp.len));
       break;
 
     case BLE_GATTC_EVT_HVX:
       RESP_ASYNC("NOTIF:%X,%s", p_ble_evt->evt.gattc_evt.params.hvx.handle,
-                 hex_str((uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data, p_ble_evt->evt.gattc_evt.params.hvx.len));
+                 hex_str((uint8_t *)p_ble_evt->evt.gattc_evt.params.hvx.data,
+                         p_ble_evt->evt.gattc_evt.params.hvx.len));
       break;
 
     case BLE_GAP_EVT_TIMEOUT: {
@@ -138,11 +142,14 @@ static void on_ble_evt(const ble_evt_t *p_ble_evt, void *p_context) {
 static bool scan_response(ble_gap_evt_adv_report_t *p_adv_report) {
   // Build scan report
   uint8_t name[32];
-  uint8_t name_len = enrf_adv_parse(p_adv_report, BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME, name, sizeof(name));
+  uint8_t name_len = enrf_adv_parse(p_adv_report, BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME,
+                                    BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME, name, sizeof(name));
   name[name_len] = 0;
-  snprintf(m_char_buff, sizeof(m_char_buff), "%s;%s;", enrf_addr_to_str(&(p_adv_report->peer_addr)), name);
+  snprintf(m_char_buff, sizeof(m_char_buff), "%s;%s;", enrf_addr_to_str(&(p_adv_report->peer_addr)),
+           name);
   uint8_t data[32];
-  uint8_t data_len = enrf_adv_parse(p_adv_report, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA, data, sizeof(data));
+  uint8_t data_len = enrf_adv_parse(p_adv_report, BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA,
+                                    BLE_GAP_AD_TYPE_MANUFACTURER_SPECIFIC_DATA, data, sizeof(data));
   bytes_to_hex(data, data_len, m_char_buff + strlen(m_char_buff));
   // Check for match
   char *match_pos = m_scan_match;
@@ -209,7 +216,7 @@ static void advertise() {
     if (*m_params[0] == '#') {
       // Manufacturer data field
       uint8_t data[32];
-      uint32_t len = hex_to_bytes(m_params[0]+1, data, sizeof(data));
+      uint32_t len = hex_to_bytes(m_params[0] + 1, data, sizeof(data));
       VALIDATE_NRF(enrf_start_advertise(BOOL_PARAM(1), *((uint16_t *)data), BLE_ADVDATA_NO_NAME,
                                         data + 2, len - 2,
                                         interval_ms, timeout_s, nus_data_received));
@@ -217,10 +224,10 @@ static void advertise() {
       // Name field
       ble_gap_conn_sec_mode_t sec_mode;
       BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-      sd_ble_gap_device_name_set(&sec_mode, (const uint8_t*)m_params[0], strlen(m_params[0]));
+      sd_ble_gap_device_name_set(&sec_mode, (const uint8_t *)m_params[0], strlen(m_params[0]));
       VALIDATE_NRF(enrf_start_advertise(BOOL_PARAM(1), 0, BLE_ADVDATA_FULL_NAME,
-                                       NULL, 0,
-                                       interval_ms, timeout_s, nus_data_received));
+                                        NULL, 0,
+                                        interval_ms, timeout_s, nus_data_received));
     }
   }
 }
@@ -251,10 +258,11 @@ static void add_uuid() {
     } else {
       // Service uuid
       service_uuid.uuid = *((uint16_t *)&base_uuid.uuid128 + 6);
-      if (service_uuid.uuid)
+      if (service_uuid.uuid) {
         VALIDATE_NRF(ble_db_discovery_evt_register(&service_uuid));
-      else
+      } else {
         CMD_OK();
+      }
     }
   } else {
     CMD_ERROR("Invalid UUID");
@@ -339,40 +347,40 @@ static void bsp_event_handler(bsp_event_t event) {
 //--------------------------------------------------------------------------
 
 const char *m_help =
-    "\n=== ble_tool ===\n"
-    "Syntax: command[;param]+\n"
-    "Available commands:\n"
-    "  vers                      Show version\n"
-    "  tx_pow                    Set tx power\n"
-    "    param pow_dbm\n"
-    "  scan                      Start or stop scan\n"
-    "    params: match_string;only_once;long_range;active;timeout\n"
-    "    Empty params stops scan\n"
-    "  advertise                 Start advertisement\n"
-    "    params: name|manuf_data;connectable;long_range;timeout_s;interval_ms\n"
-    "    Empty params stops advertisings\n"
-    "  connect                   Connect to given address\n"
-    "    params: mac_address;long_range\n"
-    "  cancel_connect\n"
-    "  disconnect\n"
-    "  add_uid                   Add service or charact uuid\n"
-    "    param: uuid_in_hex\n"
-    "  notify                    Enable notifications\n"
-    "    param: handle\n"
-    "  write_cmd                 Write charact value\n"
-    "    param: handle;value_in_hex\n"
-    "  write                     Write charact value with response\n"
-    "    param: handle;value_in_hex\n"
-    "  read                      Read charact value\n"
-    "    param: handle\n"
-    "  nusc                      Write nus client string\n"
-    "    param: string\n"
-    "  restart                   Restart unit with possible dfu mode\n"
-    "    param: 1|0\n"
-    "  mac                       Show unit mac address\n"
-    "  led                       Turn on or off led\n"
-    "    params: led_no;on\n"
-    "";
+  "\n=== ble_tool ===\n"
+  "Syntax: command[;param]+\n"
+  "Available commands:\n"
+  "  vers                      Show version\n"
+  "  tx_pow                    Set tx power\n"
+  "    param pow_dbm\n"
+  "  scan                      Start or stop scan\n"
+  "    params: match_string;only_once;long_range;active;timeout\n"
+  "    Empty params stops scan\n"
+  "  advertise                 Start advertisement\n"
+  "    params: name|manuf_data;connectable;long_range;timeout_s;interval_ms\n"
+  "    Empty params stops advertisings\n"
+  "  connect                   Connect to given address\n"
+  "    params: mac_address;long_range\n"
+  "  cancel_connect\n"
+  "  disconnect\n"
+  "  add_uid                   Add service or charact uuid\n"
+  "    param: uuid_in_hex\n"
+  "  notify                    Enable notifications\n"
+  "    param: handle\n"
+  "  write_cmd                 Write charact value\n"
+  "    param: handle;value_in_hex\n"
+  "  write                     Write charact value with response\n"
+  "    param: handle;value_in_hex\n"
+  "  read                      Read charact value\n"
+  "    param: handle\n"
+  "  nusc                      Write nus client string\n"
+  "    param: string\n"
+  "  restart                   Restart unit with possible dfu mode\n"
+  "    param: 1|0\n"
+  "  mac                       Show unit mac address\n"
+  "  led                       Turn on or off led\n"
+  "    params: led_no;on\n"
+  "";
 #define CMD_EQ(str) ((strcasecmp(m_command, str) == 0))
 
 static void handle_command() {
@@ -382,13 +390,15 @@ static void handle_command() {
   memset(m_params, 0, sizeof(m_params));
   do {
     pos = strchr(pos, ';');
-    if (pos)
+    if (pos) {
       *(pos++) = 0;
+    }
     m_params[m_param_cnt] = pos;
   } while (pos && ++m_param_cnt < MAX_PARAMS);
   pos = m_command;
-  while (*pos)
+  while (*pos) {
     *pos++ = toupper(*pos);
+  }
   if (CMD_EQ("vers")) {
     CMD_OK("%s %s", _build_version, _build_time);
   } else if (CMD_EQ("help")) {

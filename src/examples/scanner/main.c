@@ -9,7 +9,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -23,11 +23,13 @@ bool report_cb(ble_gap_evt_adv_report_t *p_adv_report) {
   uint8_t name_len = enrf_adv_parse(p_adv_report,
                                     BLE_GAP_AD_TYPE_SHORT_LOCAL_NAME, BLE_GAP_AD_TYPE_COMPLETE_LOCAL_NAME,
                                     name, sizeof(name));
-  if (!name_len)
+  if (!name_len) {
     return false;
+  }
   name[name_len] = 0;
   static char info[100];
-  snprintf(info, sizeof(info), "%s;%s;%d", enrf_addr_to_str(&(p_adv_report->peer_addr)), name, p_adv_report->rssi);
+  snprintf(info, sizeof(info), "%s;%s;%d", enrf_addr_to_str(&(p_adv_report->peer_addr)), name,
+           p_adv_report->rssi);
   NRF_LOG_INFO("%s", info);
   return false;
 }
@@ -63,6 +65,7 @@ void bsp_event_handler(bsp_event_t event) {
 int main() {
   enrf_init("scanner", NULL);
   bsp_init(BSP_INIT_BUTTONS | BSP_INIT_LEDS, bsp_event_handler);
-  while (true)
+  while (true) {
     enrf_wait_for_event();
+  }
 }

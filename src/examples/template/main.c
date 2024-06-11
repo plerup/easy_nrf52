@@ -10,7 +10,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -23,7 +23,7 @@ bool nus_data_received(uint8_t *data, uint32_t length) {
   // Data received from Nordic UART service, assume it's a command string
   char str[20];
   bool taken = true;
-  strlcpy(str, (const char *)data, MIN(sizeof(str), length+1));
+  strlcpy(str, (const char *)data, MIN(sizeof(str), length + 1));
   if (strcasestr(str, "Hello")) {
     enrf_nus_string_send("Hello from enrf template");
   } else if (strcasestr(str, "led")) {
@@ -33,8 +33,9 @@ bool nus_data_received(uint8_t *data, uint32_t length) {
   } else if (strcasestr(str, "DATA")) {
     // Send raw data
     uint8_t buff[256];
-    for (int i = 0; i < sizeof(buff); i++)
+    for (int i = 0; i < sizeof(buff); i++) {
       buff[i] = i;
+    }
     enrf_nus_data_send(buff, sizeof(buff));
   } else {
     // Propagate to common command handler

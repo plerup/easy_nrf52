@@ -10,7 +10,7 @@
 // General and full license information is available at:
 //   https://github.com/plerup/easy_nrf52
 //
-// Copyright (c) 2022-2023 Peter Lerup. All rights reserved.
+// Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
 //
 //====================================================================================
 
@@ -85,25 +85,25 @@ static ble_gap_adv_data_t m_adv_data = {
 };
 
 static ble_gap_conn_params_t m_connection_param = {
-    MSEC_TO_UNITS(20, UNIT_1_25_MS),
-    MSEC_TO_UNITS(75, UNIT_1_25_MS),
-    0,
-    MSEC_TO_UNITS(4000, UNIT_10_MS)
+  MSEC_TO_UNITS(20, UNIT_1_25_MS),
+  MSEC_TO_UNITS(75, UNIT_1_25_MS),
+  0,
+  MSEC_TO_UNITS(4000, UNIT_10_MS)
 };
 
 static ble_gap_scan_params_t m_scan_params = {
-    .active = 0,
-    .interval = 0x00A0,
-    .window = 0x0050,
-    .timeout = 0,
-    .scan_phys = BLE_GAP_PHY_AUTO
+  .active = 0,
+  .interval = 0x00A0,
+  .window = 0x0050,
+  .timeout = 0,
+  .scan_phys = BLE_GAP_PHY_AUTO
 };
 
 static uint8_t    m_scan_buffer[BLE_GAP_SCAN_BUFFER_EXTENDED_MIN];
 static ble_data_t m_adv_rep_buffer = {.p_data = m_scan_buffer, .len = sizeof(m_scan_buffer)};
 
 static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;
-static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT-3;
+static uint16_t m_ble_nus_max_data_len = BLE_GATT_ATT_MTU_DEFAULT - 3;
 
 // Callbacks
 static nrf_sdh_ble_evt_handler_t m_app_evt_cb = NULL;
@@ -122,7 +122,6 @@ static int         m_restart = 0;
 static bool        m_long_range = false;
 static int         m_tx_power = 0;
 static bool        m_serial_active = false;
-
 
 __WEAK void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name) {
   app_error_handler(0xDEADBEEF, line_num, p_file_name);
@@ -211,8 +210,10 @@ static void nrf_qwr_error_handler(uint32_t nrf_error) {
 
 static void nus_data_handler(ble_nus_evt_t *p_evt) {
   if (p_evt->type == BLE_NUS_EVT_RX_DATA) {
-    if (m_app_nus_rec_cb && m_app_nus_rec_cb((uint8_t *)p_evt->params.rx_data.p_data, p_evt->params.rx_data.length))
+    if (m_app_nus_rec_cb &&
+        m_app_nus_rec_cb((uint8_t *)p_evt->params.rx_data.p_data, p_evt->params.rx_data.length)) {
       return;
+    }
     // Check for possible standard requests
     char str[BLE_NUS_MAX_DATA_LEN + 1];
     strlcpy(str, (const char*)p_evt->params.rx_data.p_data, MIN(sizeof(str), p_evt->params.rx_data.length+1));
@@ -313,25 +314,27 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
     case BLE_GAP_EVT_DISCONNECTED:
       NRF_LOG_DEBUG("Disconnected: reason 0x%x.", p_ble_evt->evt.gap_evt.params.disconnected.reason);
       m_conn_handle = BLE_CONN_HANDLE_INVALID;
-      if (m_is_advertising)
+      if (m_is_advertising) {
         sd_ble_gap_adv_start(m_adv_handle, APP_BLE_CONN_CFG_TAG);
+      }
       m_is_central = false;
       break;
 
     case BLE_GAP_EVT_PHY_UPDATE_REQUEST: {
       NRF_LOG_DEBUG("PHY update request.");
-      ble_gap_phys_t const phys =
-      {
+      ble_gap_phys_t const phys = {
         .rx_phys = BLE_GAP_PHY_AUTO,
         .tx_phys = BLE_GAP_PHY_AUTO,
       };
       err_code = sd_ble_gap_phy_update(p_ble_evt->evt.gap_evt.conn_handle, &phys);
       APP_ERROR_CHECK(err_code);
-    } break;
+    }
+    break;
 
     case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
       // Pairing not supported
-      err_code = sd_ble_gap_sec_params_reply(m_conn_handle, BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP, NULL, NULL);
+      err_code = sd_ble_gap_sec_params_reply(m_conn_handle, BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP, NULL,
+                                             NULL);
       APP_ERROR_CHECK(err_code);
       break;
 
@@ -339,8 +342,9 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
       ble_evt_t *p = (ble_evt_t *)p_ble_evt;
       ble_gap_evt_t *p_gap_evt = &p->evt.gap_evt;
       if (!m_adv_report_cb || !m_adv_report_cb(&p_gap_evt->params.adv_report))
-        if (sd_ble_gap_scan_start(NULL, &m_adv_rep_buffer) != NRF_SUCCESS)
+        if (sd_ble_gap_scan_start(NULL, &m_adv_rep_buffer) != NRF_SUCCESS) {
           NRF_LOG_ERROR("Failed to restart scanning");
+        }
       break;
     }
 
@@ -382,11 +386,13 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
       break;
   }
 
-  if (m_is_central)
+  if (m_is_central) {
     ble_db_discovery_on_ble_evt(p_ble_evt, &m_ble_db_discovery);
+  }
 
-  if (m_app_evt_cb)
+  if (m_app_evt_cb) {
     m_app_evt_cb(p_ble_evt, p_context);
+  }
 }
 
 //--------------------------------------------------------------------------
@@ -452,10 +458,12 @@ static void power_management_init(void) {
 //--------------------------------------------------------------------------
 
 static void db_disc_handler(ble_db_discovery_evt_t *p_evt) {
-  if (m_nus_c_rx_cb)
+  if (m_nus_c_rx_cb) {
     ble_nus_c_on_db_disc_evt(&m_ble_nus_c, p_evt);
-  if (m_disc_cb)
+  }
+  if (m_disc_cb) {
     m_disc_cb(p_evt);
+  }
 }
 //--------------------------------------------------------------------------
 
@@ -486,7 +494,8 @@ ret_code_t enrf_start_advertise(bool connectable,
   // Set advertisement data
   memset(&advdata, 0, sizeof(advdata));
   advdata.name_type = type;
-  advdata.flags = connectable ? BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE : BLE_GAP_ADV_FLAG_BR_EDR_NOT_SUPPORTED;
+  advdata.flags = connectable ? BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE :
+                  BLE_GAP_ADV_FLAG_BR_EDR_NOT_SUPPORTED;
   if (p_data != NULL) {
     static ble_advdata_manuf_data_t manuf_specific_data;
     manuf_specific_data.company_identifier = company_id;
@@ -501,12 +510,14 @@ ret_code_t enrf_start_advertise(bool connectable,
   memset(&m_adv_params, 0, sizeof(m_adv_params));
   if (m_long_range) {
     m_adv_params.properties.type =
-      connectable ? BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED : BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
+      connectable ? BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED :
+      BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
     m_adv_params.primary_phy = BLE_GAP_PHY_CODED;
     m_adv_params.secondary_phy = BLE_GAP_PHY_CODED;
   } else {
     m_adv_params.properties.type =
-        connectable ? BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED : BLE_GAP_ADV_TYPE_NONCONNECTABLE_SCANNABLE_UNDIRECTED;
+      connectable ? BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED :
+      BLE_GAP_ADV_TYPE_NONCONNECTABLE_SCANNABLE_UNDIRECTED;
     m_adv_params.primary_phy = BLE_GAP_PHY_1MBPS;
     m_adv_params.secondary_phy = BLE_GAP_PHY_1MBPS;
   }
@@ -551,7 +562,7 @@ ret_code_t enrf_nus_data_send(const uint8_t *data, uint32_t length) {
   while (length) {
     uint16_t curr = MIN(m_ble_nus_max_data_len, length);
     do {
-      err_code = ble_nus_data_send(&m_nus, (uint8_t*)data, &curr, m_conn_handle);
+      err_code = ble_nus_data_send(&m_nus, (uint8_t *)data, &curr, m_conn_handle);
     } while (err_code == NRF_ERROR_RESOURCES);
     length -= curr;
     data += curr;
@@ -578,7 +589,7 @@ ret_code_t enrf_start_scan(scan_report_cb_t report_cb, uint32_t timeout_s, bool 
   sd_ble_gap_scan_stop();
   m_scan_params.active = active ? 1 : 0;
   m_scan_params.extended = m_long_range ? 1 : 0;
-  m_scan_params.timeout = timeout_s*100;
+  m_scan_params.timeout = timeout_s * 100;
   m_scan_params.scan_phys = m_long_range ? BLE_GAP_PHY_CODED : BLE_GAP_PHY_AUTO;
   m_scan_params.filter_policy = BLE_GAP_SCAN_FP_ACCEPT_ALL;
   sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_SCAN_INIT, 0, m_tx_power);
@@ -603,13 +614,15 @@ uint8_t enrf_adv_parse(ble_gap_evt_adv_report_t *p_adv_report,
     uint8_t field_len = p_adv_report->data.p_data[offset];
     uint8_t field_type = p_adv_report->data.p_data[offset + 1];
 
-    if (offset + field_len > p_adv_report->data.len)
+    if (offset + field_len > p_adv_report->data.len) {
       return 0;
+    }
 
     if (field_type >= start_tag && field_type <= end_tag) {
       uint8_t len = field_len - 1;
-      if (len > dest_len)
+      if (len > dest_len) {
         return 0;
+      }
       memcpy(dest, &(p_adv_report->data.p_data[offset + 2]), len);
       return len;
     }
@@ -626,7 +639,8 @@ ret_code_t enrf_disconnect() {
 
 //--------------------------------------------------------------------------
 
-void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint16_t slave_latency, float sup_timeout_ms) {
+void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint16_t slave_latency,
+                                float sup_timeout_ms) {
   m_connection_param.min_conn_interval = MSEC_TO_UNITS(min_con_int_ms, UNIT_1_25_MS);
   m_connection_param.max_conn_interval = MSEC_TO_UNITS(max_con_int_ms, UNIT_1_25_MS);
   m_connection_param.slave_latency = slave_latency;
@@ -640,23 +654,27 @@ static void ble_nus_c_evt_handler(ble_nus_c_t *p_ble_nus_c, const ble_nus_c_evt_
   switch (p_ble_nus_evt->evt_type) {
     case BLE_NUS_C_EVT_DISCOVERY_COMPLETE:
       // UART service detected
-      err_code = ble_nus_c_handles_assign(p_ble_nus_c, p_ble_nus_evt->conn_handle, &p_ble_nus_evt->handles);
+      err_code = ble_nus_c_handles_assign(p_ble_nus_c, p_ble_nus_evt->conn_handle,
+                                          &p_ble_nus_evt->handles);
       APP_ERROR_CHECK(err_code);
       err_code = ble_nus_c_tx_notif_enable(p_ble_nus_c);
       APP_ERROR_CHECK(err_code);
-      if (m_nus_c_rx_cb)
+      if (m_nus_c_rx_cb) {
         m_nus_c_rx_cb(NULL, 1);
+      }
       break;
 
     case BLE_NUS_C_EVT_NUS_TX_EVT:
       // UART response received
-      if (m_nus_c_rx_cb)
+      if (m_nus_c_rx_cb) {
         m_nus_c_rx_cb(p_ble_nus_evt->p_data, p_ble_nus_evt->data_len);
+      }
       break;
 
     case BLE_NUS_C_EVT_DISCONNECTED:
-      if (m_nus_c_rx_cb)
+      if (m_nus_c_rx_cb) {
         m_nus_c_rx_cb(NULL, 0);
+      }
       break;
   }
 }
@@ -686,12 +704,13 @@ ret_code_t enrf_enable_char_notif(uint16_t cccd_handle, bool enable) {
   buf[0] = enable ? BLE_GATT_HVX_NOTIFICATION : 0;
   buf[1] = 0;
   const ble_gattc_write_params_t write_params = {
-      .write_op = BLE_GATT_OP_WRITE_REQ,
-      .flags = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
-      .handle = cccd_handle,
-      .offset = 0,
-      .len = sizeof(buf),
-      .p_value = buf};
+    .write_op = BLE_GATT_OP_WRITE_REQ,
+    .flags = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
+    .handle = cccd_handle,
+    .offset = 0,
+    .len = sizeof(buf),
+    .p_value = buf
+  };
   return sd_ble_gattc_write(m_conn_handle, &write_params);
 }
 
@@ -699,12 +718,13 @@ ret_code_t enrf_enable_char_notif(uint16_t cccd_handle, bool enable) {
 
 ret_code_t enrf_write_char(uint8_t op, uint16_t char_handle, uint8_t *data, uint16_t length) {
   const ble_gattc_write_params_t write_params = {
-      .write_op = op,
-      .flags = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
-      .handle = char_handle,
-      .offset = 0,
-      .len = length,
-      .p_value = data};
+    .write_op = op,
+    .flags = BLE_GATT_EXEC_WRITE_FLAG_PREPARED_WRITE,
+    .handle = char_handle,
+    .offset = 0,
+    .len = length,
+    .p_value = data
+  };
   return sd_ble_gattc_write(m_conn_handle, &write_params);
 }
 
@@ -732,8 +752,9 @@ void enrf_wait_for_event() {
 #ifdef ENRF_SERIAL_USB
   while (app_usbd_event_queue_process());
 #endif
-  if (m_restart)
+  if (m_restart) {
     enrf_restart(m_restart == 2);
+  }
   if (NRF_LOG_PROCESS() == false) {
     nrf_pwr_mgmt_run();
   }
@@ -782,8 +803,9 @@ ret_code_t enrf_add_uuid(const char *uuid) {
     if (res == NRF_SUCCESS) {
       // Service uuid
       service_uuid.uuid = *((uint16_t *)&base_uuid.uuid128 + 6);
-      if (service_uuid.uuid)
+      if (service_uuid.uuid) {
         res = ble_db_discovery_evt_register(&service_uuid);
+      }
     }
   } else {
     res = NRF_ERROR_INVALID_PARAM;
@@ -813,8 +835,9 @@ const char *enrf_addr_to_str(ble_gap_addr_t *gap_addr) {
 bool enrf_str_to_addr(const char *addr_str, ble_gap_addr_t *gap_addr) {
   int x[6];
   int cnt = sscanf(addr_str, "%X:%X:%X:%X:%X:%X", &x[5], &x[4], &x[3], &x[2], &x[1], &x[0]);
-  for (int i = 0; i < cnt; i++)
+  for (int i = 0; i < cnt; i++) {
     gap_addr->addr[i] = x[i];
+  }
   return cnt == 6;
 }
 
@@ -822,23 +845,25 @@ bool enrf_str_to_addr(const char *addr_str, ble_gap_addr_t *gap_addr) {
 
 const char *enrf_get_device_address() {
   ble_gap_addr_t ble_gap_addr;
-  if (sd_ble_gap_addr_get(&ble_gap_addr) == NRF_SUCCESS)
+  if (sd_ble_gap_addr_get(&ble_gap_addr) == NRF_SUCCESS) {
     return enrf_addr_to_str(&ble_gap_addr);
-  else
+  } else {
     return "?";
+  }
 }
 
 //--------------------------------------------------------------------------
 
 static inline uint8_t _hex_val(char val) {
-  if (val >= '0' && val <= '9')
+  if (val >= '0' && val <= '9') {
     return (uint8_t)(val) - '0';
-  else if (val >= 'A' && val <= 'F')
+  } else if (val >= 'A' && val <= 'F') {
     return (uint8_t)(val) - 'A' + 10;
-  else if (val >= 'a' && val <= 'f')
+  } else if (val >= 'a' && val <= 'f') {
     return (uint8_t)(val) - 'a' + 10;
-  else
+  } else {
     return 0xFF;
+  }
 }
 
 //--------------------------------------------------------------------------
@@ -847,10 +872,14 @@ uint32_t hex_to_bytes(const char *str, uint8_t *bytes, uint32_t max_len) {
   uint32_t len = MIN(strlen(str) / 2, max_len);
   for (uint32_t i = 0; i < len; i++) {
     uint8_t val = _hex_val(*str++);
-    if (val > 15) return 0;
+    if (val > 15) {
+      return 0;
+    }
     *bytes = val << 4;
     val = _hex_val(*str++);
-    if (val > 15) return 0;
+    if (val > 15) {
+      return 0;
+    }
     *bytes += val;
     bytes++;
   }
@@ -860,10 +889,11 @@ uint32_t hex_to_bytes(const char *str, uint8_t *bytes, uint32_t max_len) {
 //--------------------------------------------------------------------------
 
 static inline char _hex_char(uint8_t val) {
-  if (val >= 0 && val <= 9)
+  if (val >= 0 && val <= 9) {
     return '0' + val;
-  else if (val >= 10 && val <= 15)
+  } else if (val >= 10 && val <= 15) {
     return 'A' + val - 10;
+  }
   return 0;
 }
 
@@ -889,7 +919,9 @@ static size_t m_input_pos = 0;
 static char m_input_buffer[READ_BUFF_SIZE];
 
 size_t enrf_serial_read(char *str, size_t max_length) {
-  if (!m_input_available) return 0;
+  if (!m_input_available) {
+    return 0;
+  }
   size_t len = MIN(max_length - 1, MAX(1, m_input_pos));
   strncpy(str, m_input_buffer, len);
   str[len] = 0;
@@ -944,10 +976,11 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst,
       ret_code_t ret;
       do {
         if (!m_input_available && rx_buffer[0] != '\r') {
-          if (rx_buffer[0] == '\n' || m_input_pos >= READ_BUFF_SIZE)
+          if (rx_buffer[0] == '\n' || m_input_pos >= READ_BUFF_SIZE) {
             m_input_available = true;
-          else
+          } else {
             m_input_buffer[m_input_pos++] = rx_buffer[0];
+          }
         }
         // Fetch data until internal buffer is empty
         ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, rx_buffer, READ_SIZE);
@@ -996,8 +1029,9 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event) {
 //--------------------------------------------------------------------------
 
 ret_code_t enrf_serial_enable(bool on) {
-  if (!on)
+  if (!on) {
     return NRF_ERROR_API_NOT_IMPLEMENTED;
+  }
   m_serial_active = true;
   return NRF_SUCCESS;
 }
@@ -1019,7 +1053,6 @@ ret_code_t enrf_serial_write(const char *str) {
 
 //--------------------------------------------------------------------------
 
-
 #elif defined(ENRF_SERIAL_UART)
 
 #define UART_TX_BUF_SIZE 256
@@ -1031,10 +1064,11 @@ static void uart_event_handler(app_uart_evt_t *p_event) {
     case APP_UART_DATA_READY:
       app_uart_get(&ch);
       if (!m_input_available && ch != '\r') {
-        if (ch == '\n' || m_input_pos >= READ_BUFF_SIZE)
+        if (ch == '\n' || m_input_pos >= READ_BUFF_SIZE) {
           m_input_available = true;
-        else
+        } else {
           m_input_buffer[m_input_pos++] = ch;
+        }
       }
       break;
 
@@ -1076,15 +1110,15 @@ ret_code_t enrf_serial_enable(bool on) {
 ret_code_t enrf_serial_write(const char *str) {
   ret_code_t err_code = NRF_SUCCESS;
   if (m_serial_active) {
-    for (size_t i = 0; i < strlen(str) && err_code == NRF_SUCCESS; i++)
+    for (size_t i = 0; i < strlen(str) && err_code == NRF_SUCCESS; i++) {
       err_code = app_uart_put(str[i]);
+    }
   }
 
   return err_code;
 }
 
 //--------------------------------------------------------------------------
-
 
 #else
 
@@ -1121,8 +1155,9 @@ bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
   do_log = nrf_gpio_pin_read(ENRF_ENABLE_LOG_PIN) == 0;
   nrf_gpio_cfg_default(ENRF_ENABLE_LOG_PIN);
 #endif
-  if (do_log)
+  if (do_log) {
     log_init();
+  }
 #if BLE_DFU_ENABLED == 1
   err_code = ble_dfu_buttonless_async_svci_init();
   APP_ERROR_CHECK(err_code);
