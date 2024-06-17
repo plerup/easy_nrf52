@@ -15,7 +15,7 @@
 //====================================================================================
 
 #if defined(ENRF_SERIAL_USB) && defined(ENRF_SERIAL_UART)
-  #error Both usb and uart can not be used for enrf_serial
+#error Both usb and uart can not be used for enrf_serial
 #endif
 
 #define NRF_LOG_MODULE_NAME enrf
@@ -39,21 +39,21 @@ NRF_LOG_MODULE_REGISTER();
 #include "nrf_log_default_backends.h"
 
 #ifdef ENRF_SERIAL_USB
-  #include "app_usbd.h"
-  #include "app_usbd_cdc_acm.h"
-  #include "app_usbd_core.h"
-  #include "app_usbd_serial_num.h"
-  #include "app_usbd_string_desc.h"
+# include "app_usbd.h"
+# include "app_usbd_cdc_acm.h"
+# include "app_usbd_core.h"
+# include "app_usbd_serial_num.h"
+# include "app_usbd_string_desc.h"
 
 #elif defined(ENRF_SERIAL_UART)
 #endif
 
 #if BLE_DFU_ENABLED == 1
-  #include "nrf_dfu_ble_svci_bond_sharing.h"
-  #include "nrf_svci_async_function.h"
-  #include "nrf_svci_async_handler.h"
-  #include "ble_dfu.h"
-  #include "nrf_bootloader_info.h"
+# include "nrf_dfu_ble_svci_bond_sharing.h"
+# include "nrf_svci_async_function.h"
+# include "nrf_svci_async_handler.h"
+# include "ble_dfu.h"
+# include "nrf_bootloader_info.h"
 #endif
 
 #define APP_BLE_CONN_CFG_TAG            1
@@ -216,9 +216,11 @@ static void nus_data_handler(ble_nus_evt_t *p_evt) {
     }
     // Check for possible standard requests
     char str[BLE_NUS_MAX_DATA_LEN + 1];
-    strlcpy(str, (const char*)p_evt->params.rx_data.p_data, MIN(sizeof(str), p_evt->params.rx_data.length+1));
-    if (str[0] && str[strlen(str) - 1] == '\n')
+    strlcpy(str, (const char *)p_evt->params.rx_data.p_data, MIN(sizeof(str),
+                                                                 p_evt->params.rx_data.length + 1));
+    if (str[0] && str[strlen(str) - 1] == '\n') {
       str[strlen(str) - 1] = 0;
+    }
     if (EQ_STR(str, "version?")) {
       char ver[80];
       snprintf(ver, sizeof(ver), "%s %s", _build_version, _build_time);
@@ -1140,6 +1142,24 @@ size_t enrf_serial_read(char *str, size_t max_length) {
 }
 
 #endif
+
+static bool delay_timeout = false;
+static void delay_timeout_proc(void *p_context) {
+  delay_timeout = true;
+}
+
+void enrf_delay_ms(uint32_t ms) {
+  static bool initated = false;
+  APP_TIMER_DEF(id);
+  if (!initated) {
+    app_timer_create(&id, APP_TIMER_MODE_SINGLE_SHOT, delay_timeout_proc);
+  }
+  delay_timeout = false;
+  app_timer_start(id, APP_TIMER_TICKS(ms), NULL);
+  while (!delay_timeout) {
+    enrf_wait_for_event();
+  }
+}
 
 //--------------------------------------------------------------------------
 

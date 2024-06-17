@@ -122,6 +122,10 @@ uint32_t hex_to_bytes(const char *str, uint8_t *bytes, uint32_t max_len);
 // Convert byte array to hex string
 void bytes_to_hex(uint8_t *bytes, uint32_t len, char *str);
 
+// Do a timer based delay.
+// Can be used to avoid the high current consumption in NOP-loop based nrf_delay_ms.
+void enrf_delay_ms(uint32_t ms);
+
 #ifdef __cplusplus
 }
 #endif
