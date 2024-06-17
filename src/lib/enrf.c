@@ -1153,6 +1153,7 @@ void enrf_delay_ms(uint32_t ms) {
   APP_TIMER_DEF(id);
   if (!initated) {
     app_timer_create(&id, APP_TIMER_MODE_SINGLE_SHOT, delay_timeout_proc);
+    initated = true;
   }
   delay_timeout = false;
   app_timer_start(id, APP_TIMER_TICKS(ms), NULL);
