@@ -949,6 +949,8 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst,
                                     app_usbd_cdc_acm_user_event_t event);
 static void usbd_user_ev_handler(app_usbd_event_type_t event);
 
+static bool m_acm_connected = false;
+
 APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
                             cdc_acm_user_ev_handler,
                             CDC_ACM_COMM_INTERFACE,
@@ -968,9 +970,11 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst,
     case APP_USBD_CDC_ACM_USER_EVT_PORT_OPEN: {
       // Setup first transfer
       app_usbd_cdc_acm_read(&m_app_cdc_acm, rx_buffer, READ_SIZE);
+      m_acm_connected = true;
       break;
     }
     case APP_USBD_CDC_ACM_USER_EVT_PORT_CLOSE:
+      m_acm_connected = false;
       break;
     case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
       break;
@@ -1054,6 +1058,10 @@ ret_code_t enrf_serial_write(const char *str) {
 }
 
 //--------------------------------------------------------------------------
+
+bool enrf_acm_connected() {
+  return m_acm_connected;
+}
 
 #elif defined(ENRF_SERIAL_UART)
 

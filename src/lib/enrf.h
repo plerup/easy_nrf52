@@ -113,6 +113,7 @@ const char *enrf_get_device_address();
 ret_code_t enrf_serial_enable(bool on);
 ret_code_t enrf_serial_write(const char *str);
 size_t enrf_serial_read(char *str, size_t max_length);
+bool enrf_acm_connected();
 
 // Utility functions
 

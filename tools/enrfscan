@@ -30,8 +30,9 @@ async def do_scan(match):
             dev_list[device.address] = ""
         if (len(match) == 0 or match in info) and dev_list[device.address] != info:
             rssi = adv.rssi if hasattr(adv, "rssi") else device.rssi
-            print(info + ";" + str(rssi))
-        dev_list[device.address] = info
+            print(info + ";" + str(rssi), flush=True)
+        if len(sys.argv) < 3:
+            dev_list[device.address] = info
         return False
 
     while True:

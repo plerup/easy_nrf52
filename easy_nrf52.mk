@@ -212,6 +212,7 @@ CFLAGS += -DNRF_SDH_BLE_VS_UUID_COUNT=$(UUID_CNT)
 GCC_ARM_PREFIX := $(GCC_ROOT)/bin/arm-none-eabi
 CC = '$(GCC_ARM_PREFIX)-gcc'
 CXX = '$(GCC_ARM_PREFIX)-c++'
+LINK ?= $(CC)
 OBJCOPY = '$(GCC_ARM_PREFIX)-objcopy'
 SIZE = '$(GCC_ARM_PREFIX)-size'
 GDB = '$(GCC_ARM_PREFIX)-gdb'
@@ -232,7 +233,7 @@ VPATH += $(sort $(dir $(SRC_FILES)))
 COMP_DEP = $(MAKEFILE_LIST) $(SDK_CONFIG) $(COMP_DEP_EXTRA) | $(OBJ_DIR)
 
 # Compile
-C_COM = $(GCC_PREFIX) $(CC) -c $(CFLAGS) $(C_INCLUDES) --std=gnu99
+C_COM = $(GCC_PREFIX) $(CC) -c $(CFLAGS) $(C_INCLUDES) --std=gnu99 $(C_UNDEF)
 CPP_COM = $(GCC_PREFIX) $(CXX) -c $(CFLAGS) $(C_INCLUDES) --std=gnu++11 -fno-rtti
 $(OBJ_DIR)/%.c$(OBJ_EXT): %.c $(COMP_DEP)
 	echo CC $(<F)
@@ -262,7 +263,7 @@ $(OUT_HEX): $(OBJ_FILES) $(LINKER_SCRIPT)
 	echo "  Version: $(BUILD_TIME) $(BUILD_VERSION)"
 	echo "char *_build_time=\"$(BUILD_TIME)\", *_build_version=\"$(BUILD_VERSION)\";" \
 	  | $(CC) -c $(CFLAGS) $(C_INCLUDES) -xc -o $(BUILD_INFO) -
-	$(CC) $(LDFLAGS) $(OBJ_FILES) $(BUILD_INFO) $(LIB_FILES) -Wl,-Map "-Wl,$(OUT_PATH).map" -o $(OUT_ELF)
+	$(LINK) $(LDFLAGS) $(OBJ_FILES) $(BUILD_INFO) $(LIB_FILES) -Wl,-Map "-Wl,$(OUT_PATH).map" -o $(OUT_ELF)
 	$(OBJCOPY) -O ihex $(OUT_ELF) $(OUT_HEX)
 	$(SIZE) -A $(OUT_ELF) | perl -e 'while (<>) {$$r += $$1 if /^\.(?:data|bss)\s+(\d+)/;$$f += $$1 if /^\.(?:text|data)\s+(\d+)/;}print "\nMemory usage\n";print sprintf("  %-6s %6d bytes (%.0f KB)\n" x 2 ."\n", "Ram:", $$r, $$r/1024, "Flash:", $$f, $$f/1024);'
 	@perl -e 'print "Build complete. Elapsed time: ", time()-$(START_TIME),  " seconds\n\n"'
