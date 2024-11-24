@@ -41,8 +41,9 @@ def read_string():
     if args.debug:
         print("In:", resp)
     if time.time()-start > uart.timeout:
-        err_mess("Response timeout")
-        raise EOFError
+        if resp:
+            err_mess("Response timeout")
+            raise EOFError
     if "#CONNECTED" in resp:
         connecting = False
         connected = True
@@ -79,7 +80,7 @@ def send_string(str, wait_for=None, timeout=3, ignore_err=False):
         resp = read_string()
         if wait_for in resp:
             return resp[len(wait_for):]
-        if resp[0] == "*":
+        if resp and resp[0] == "*":
             if ignore_err:
                 return
             else:
