@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-#
-# show_mac.py
-#
-# Converts the extracted memory values of the ROM-based
+#====================================================================================
+# Convert the extracted memory values of the ROM-based
 # mac address of a nrf52 device into a readable format
+#
+# This file is part of easy_nrf52
+# License: LGPL 2.1
+# General and full license information is available at:
+#    https://github.com/plerup/easy_nrf52
+#
+# Copyright (c) 2023-2024 Peter Lerup. All rights reserved.
+#
+#====================================================================================
 
 import sys, re
 

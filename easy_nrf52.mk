@@ -21,22 +21,24 @@ ENV_NAME := $(notdir $(basename $(_THIS)))
 CONFIG_NAME = config.mk
 CMD_DEFINES := $(strip $(foreach par,$(shell tr "\0" " " </proc/$$PPID/cmdline),$(if $(findstring =,$(par)),$(par),)))
 SUB_MAKE = +make -f $(_THIS) $(CMD_DEFINES)
+PYTHON ?= python3
+PERL ?= perl
 
 # Utility functions
 git_description = $(shell git -C $(1) describe --tags --always --dirty 2>/dev/null || echo Unknown)
 calc = $(shell printf "0x%0X" $$(($1)))
 
 # Validate installation
-INST_FILE = $(HOME)/.$(ENV_NAME).install
+INST_FILE = $(HOME)/.config/$(ENV_NAME)/install
 ifeq ($(wildcard $(INST_FILE)),)
-  $(error Installation has not been made. Run ./install)
+  $(error Installation has not been made or has changed. Run ./install)
 endif
 include $(INST_FILE)
 SDK_ROOT = $(lastword $(wildcard $(INSTALL_ROOT)/nRF5_SDK_$(SDK_VERSION)*))
 ifeq ($(wildcard $(SDK_ROOT)),)
   $(error No SDK for version "$(SDK_VERSION) installed")
 endif
-FULL_SDK_VERSION := $(shell perl -e 'print $$1 if $$ARGV[0] =~ /SDK_([\d\.]+)/' $(SDK_ROOT))
+FULL_SDK_VERSION := $(shell $(PERL) -e 'print $$1 if $$ARGV[0] =~ /SDK_([\d\.]+)/' $(SDK_ROOT))
 GCC_ROOT ?= $(wildcard $(INSTALL_ROOT)/gcc-arm-none-eabi*)
 ifeq ($(wildcard $(GCC_ROOT)),)
   $(error No GCC installation found")
@@ -115,7 +117,7 @@ TEMPLATE_MAKE_LIST ?= $(TEMPLATE_MAKE_PERI) $(TEMPLATE_MAKE_CENT)
 DEF_MAKE = $(BUILD_ROOT)/template.mk
 DEF_MAKE_CMD = $(TOOLS_DIR)/parse_make.pl
 $(DEF_MAKE): $(TEMPLATE_MAKE_LIST) $(MAKEFILE_LIST) $(DEF_MAKE_CMD) | $(BUILD_ROOT)
-	perl $(DEF_MAKE_CMD) $(TEMPLATE_MAKE_LIST) >$(DEF_MAKE)
+	$(PERL) $(DEF_MAKE_CMD) $(TEMPLATE_MAKE_LIST) >$(DEF_MAKE)
 
 -include $(DEF_MAKE)
 
@@ -125,7 +127,7 @@ ifndef SDK_CONFIG
   SDK_TEMPLATES = $(TEMPLATE_DIR_PERI)/config/sdk_config.h $(TEMPLATE_DIR_CENT)/config/sdk_config.h
   MERGE_CONF_CMD = $(TOOLS_DIR)/merge_config.pl
   $(SDK_CONFIG): $(MERGE_CONF_CMD) $(SDK_TEMPLATES) $(MAKEFILE_LIST)
-		perl $(MERGE_CONF_CMD) $(SDK_TEMPLATES) >$(SDK_CONFIG)
+		$(PERL) $(MERGE_CONF_CMD) $(SDK_TEMPLATES) >$(SDK_CONFIG)
 endif
 
 # Possible serial usb or uart
@@ -265,8 +267,8 @@ $(OUT_HEX): $(OBJ_FILES) $(LINKER_SCRIPT)
 	  | $(CC) -c $(CFLAGS) $(C_INCLUDES) -xc -o $(BUILD_INFO) -
 	$(LINK) $(LDFLAGS) $(OBJ_FILES) $(BUILD_INFO) $(LIB_FILES) -Wl,-Map "-Wl,$(OUT_PATH).map" -o $(OUT_ELF)
 	$(OBJCOPY) -O ihex $(OUT_ELF) $(OUT_HEX)
-	$(SIZE) -A $(OUT_ELF) | perl -e 'while (<>) {$$r += $$1 if /^\.(?:data|bss)\s+(\d+)/;$$f += $$1 if /^\.(?:text|data)\s+(\d+)/;}print "\nMemory usage\n";print sprintf("  %-6s %6d bytes (%.0f KB)\n" x 2 ."\n", "Ram:", $$r, $$r/1024, "Flash:", $$f, $$f/1024);'
-	@perl -e 'print "Build complete. Elapsed time: ", time()-$(START_TIME),  " seconds\n\n"'
+	$(SIZE) -A $(OUT_ELF) | $(PERL) -e 'while (<>) {$$r += $$1 if /^\.(?:data|bss)\s+(\d+)/;$$f += $$1 if /^\.(?:text|data)\s+(\d+)/;}print "\nMemory usage\n";print sprintf("  %-6s %6d bytes (%.0f KB)\n" x 2 ."\n", "Ram:", $$r, $$r/1024, "Flash:", $$f, $$f/1024);'
+	@$(PERL) -e 'print "Build complete. Elapsed time: ", time()-$(START_TIME),  " seconds\n\n"'
 ifeq ($(DEMO_APP),$(PROJ_MAIN))
 	echo "======================================================"
 	echo "=== Please note that this is the example template! ==="
@@ -295,7 +297,7 @@ BL_COM ?= ble
 BOOTLOADER_SETTINGS = $(BUILD_ROOT)/bl_settings.hex
 $(BOOTLOADER_SETTINGS) bootloader_settings: $(OUT_HEX)
 	echo Generating bootloader settings
-	nrfutil settings generate $(BOOTLOADER_SETTINGS) \
+	$(NRFUTIL) settings generate $(BOOTLOADER_SETTINGS) \
           --family $(CHIP_FAM) \
           --bootloader-version 1 --bl-settings-version 1 \
           --application=$(OUT_HEX) --application-version 1 >/dev/null
@@ -320,7 +322,7 @@ hex_all:
 
 # Show all involved include directories, source files and compilation defines
 list_files:
-	perl -e 'foreach (@ARGV) {print "$$_\n"}' "===== Include directories =====" $(INC_FOLDERS)  "===== Source files =====" $(SRC_FILES) \
+	$(PERL) -e 'foreach (@ARGV) {print "$$_\n"}' "===== Include directories =====" $(INC_FOLDERS)  "===== Source files =====" $(SRC_FILES) \
 	    "===== Compilation defines =====" $(CFLAGS)
 
 # == Flashing operations ==
@@ -456,10 +458,10 @@ erase_flash:
 	$(FLASH_ERASE)
 
 show_uicr:
-	$(READ_UICR) | perl $(TOOLS_DIR)/show_uicr.pl
+	$(READ_UICR) | $(PERL) $(TOOLS_DIR)/show_uicr.pl
 
 show_mac:
-	$(READ_MAC) | python $(TOOLS_DIR)/show_mac.py
+	$(READ_MAC) | $(PYTHON) $(TOOLS_DIR)/show_mac.py
 
 reset:
 	echo Reset
@@ -474,12 +476,12 @@ $(OBJ_DIR): | $(BUILD_ROOT)
 
 # Patching possible faulty UICR definitions in bootloader memory config file
 $(DEF_BL_MEM_CONF):
-	perl $(TOOLS_DIR)/patch_uicr.pl $(wildcard $(dir $(TEMPLATE_MAKE_LIST))*.ld) >$@
+	$(PERL) $(TOOLS_DIR)/patch_uicr.pl $(wildcard $(dir $(TEMPLATE_MAKE_LIST))*.ld) >$@
 
 # Visual Studio Code
 vscode: $(DEF_MAKE)
 	$(eval CMD_DEFINES := $(strip $(foreach par,$(shell tr "\0" " " </proc/$$PPID/cmdline),$(if $(findstring =,$(par)),$(par),))))
-	perl $(TOOLS_DIR)/vscode.pl -n "$(PROJ_NAME)" -m "make -f $(_THIS) $(CMD_DEFINES)" -w "$(VS_CODE_DIR)" -b "$(OOCD_CFG)" -o "$(OUT_ELF)" $(CC) $(CFLAGS) $(C_INCLUDES)
+	$(PERL) $(TOOLS_DIR)/vscode.pl -n "$(PROJ_NAME)" -m "make -f $(_THIS) $(CMD_DEFINES)" -w "$(VS_CODE_DIR)" -b "$(OOCD_CFG)" -o "$(OUT_ELF)" $(CC) $(CFLAGS) $(C_INCLUDES)
 
 # GDB debugging
 start_gdb_server:
@@ -510,19 +512,19 @@ ifeq ($(PRIV_KEY_FILE), $(DEV_PRIV_KEY_FILE))
 else
 	echo "- Generating public key from: $(PRIV_KEY_FILE)"
 endif
-	nrfutil keys display --key pk --format code $(PRIV_KEY_FILE) --out_file $@
+	$(NRFUTIL) keys display --key pk --format code $(PRIV_KEY_FILE) --out_file $@
 
 gen_priv_key:
-	nrfutil keys generate $(PROJ_PRIV_KEY_NAME)
+	$(NRFUTIL) keys generate $(PROJ_PRIV_KEY_NAME)
 
 # Nordic dfu zip
 DFU_ZIP ?= $(PROJ_NAME)_$(BOARD)_dfu.zip
 dfu_zip $(DFU_ZIP):
 	$(SUB_MAKE)
 	echo Signing package with key file: $(PRIV_KEY_FILE)
-	$(eval SD_ID := $(shell nrfutil pkg generate --help | grep $(SD_VERS) | perl -e "print +(split(/\|/, <>))[2];"))
+	$(eval SD_ID := $(shell $(NRFUTIL) pkg generate --help | grep $(SD_VERS) | $(PERL) -e "print +(split(/\|/, <>))[2];"))
 	$(eval SD_ID := $(if $(SD_ID), $(SD_ID), 0x0100))
-	nrfutil pkg generate --hw-version 52 --application-version 0xff --sd-req $(SD_ID) \
+	$(NRFUTIL) pkg generate --hw-version 52 --application-version 0xff --sd-req $(SD_ID) \
                        --key-file $(PRIV_KEY_FILE) \
                        --application $(OUT_HEX) $(DFU_ZIP)
 
@@ -544,7 +546,7 @@ endif
 # Serial monitor
 MONITOR_PORT ?= $(DFU_PORT)
 MONITOR_SPEED ?= 115200
-MONITOR_COM ?= python3 -m serial.tools.miniterm -e $(MONITOR_PORT) $(MONITOR_SPEED)
+MONITOR_COM ?= $(PYTHON) -m serial.tools.miniterm -e $(MONITOR_PORT) $(MONITOR_SPEED)
 monitor:
 ifneq ($(ENRF_SERIAL),)
 	$(MONITOR_COM)
@@ -583,7 +585,7 @@ list_segger:
 
 # Show connected stlink units
 list_stlink:
-	st-info --probe | perl -e 'while (<>) { next unless s/\s+serial:\s+//; s/(\w\w)/\\x$$1/g; print; }'
+	st-info --probe | $(PERL) -e 'while (<>) { next unless s/\s+serial:\s+//; s/(\w\w)/\\x$$1/g; print; }'
 
 help:
 help:

@@ -21,6 +21,7 @@ use Cwd 'abs_path';
 my $env_name = "easy_nrf52";
 my $this_dir = dirname(abs_path(__FILE__));
 my $bin_dir = "/usr/local/bin";
+my $py_env_dir;
 
 my $gcc_version = "gcc-arm-none-eabi-10.3-2021.10";
 my @tool_list = (
@@ -101,13 +102,27 @@ sub file_to_string {
 #--------------------------------------------------------------------
 
 sub create_command {
-  command("sudo ln -s -f $this_dir/tools/$_[0] $bin_dir/$_[0]");
+  my $dst = "$bin_dir/$_[0]";
+  command("sudo rm $dst") if -e $dst;
+  if ($_[1]) {
+    command("sudo sh -c 'echo $py_env_dir/bin/python3 $this_dir/tools/$_[0] \"\$\@\" >$dst'");
+    command("sudo chmod +x $dst");
+  } else {
+    command("sudo ln -s -f $this_dir/tools/$_[0] $dst");
+  }
 }
 
 #--------------------------------------------------------------------
 
+print "==== Installing required tools for easy_nrf52 ====\n";
+print "Admin rights are required\n";
+command("sudo echo");
+
 my $install_root = prompt("Installation root directory", "$ENV{'HOME'}/.$env_name");
 my $sdk_list = prompt("Nordic SDK version(s)", "15 17");
+my $nrfutil = "$install_root/nrfutil";
+
+$py_env_dir = "$install_root/python_env";
 
 my %sdks;
 print "Validating SDKs...\n";
@@ -137,7 +152,7 @@ foreach (glob("$setup_dir/*")) {
     print "  $1\n";
     command("rm -rf $dir") if -d $dir;
     command("unzip -q -o -d $install_root $_");
-    # Patch the common makefiles to make them use the gcc installed here
+    # Patch the common makefiles in order to make them use the gcc installed here
     my $mk_file = "$dir/components/toolchain/gcc/Makefile.posix";
     my $txt = file_to_string($mk_file);
     $txt =~ s/(GNU_INSTALL_ROOT \S=).+/$1 $install_root\/$gcc_version\/bin\//;
@@ -157,16 +172,25 @@ foreach (glob("$setup_dir/*")) {
   }
 }
 
-print "Installing, sudo will be required\n...\n";
-command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
+print "Installing...\n";
+print "  System tools\n";
 command("sudo apt update -qq -y >/dev/null 2>&1");
-command("sudo apt install python3-pip srecord openocd libzip-dev stlink-tools curl libncurses5* -qq -y >/dev/null 2>&1");
-command("sudo pip3 -qq install nrfutil bleak");
+command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
+command("sudo apt install python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools curl libncurses5* -qq -y >/dev/null 2>&1");
+command("sudo usermod -a -G dialout $ENV{'USER'}");
+print"  Python requirements\n";
+command("python3 -m venv $py_env_dir");
+command("$py_env_dir/bin/pip -qq install pyserial bleak");
+print "  Nordic tools\n";
+command("curl -s https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil " .
+        "-o $nrfutil");
+command("chmod +x $nrfutil");
+command("$nrfutil install -f device nrf5sdk-tools 2>/dev/null");
 if (!`which JLinkConfig`) {
   my $jlink_deb = "/tmp/JLink_Linux_x86_64.deb";
   command("curl -s -X POST https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.deb " .
     "-H \"Content-Type: application/x-www-form-urlencoded\" " .
-    "-d \"accept_license_agreement=accepted\" >$jlink_deb");
+    "-d \"accept_license_agreement=accepted\" -o $jlink_deb");
   command("sudo apt install $jlink_deb -qq -y >/dev/null 2>&1");
 }
 if (`which code`) {
@@ -174,22 +198,27 @@ if (`which code`) {
 }
 # Fix for Ubuntu 22.04 which does not have libzip 5
 my $libzip_dir = "/usr/lib/x86_64-linux-gnu";
-if (!-e "$libzip_dir/libzip.so.5") {
+if (!-e "$libzip_dir/libzip.so.5" && -e "$libzip_dir/libzip.so.4") {
   command("sudo ln -sf $libzip_dir/libzip.so.4 $libzip_dir/libzip.so.5");
 }
-
+print"  Creating command line commands\n";
 create_command("enrfmake");
 create_command("enrfuart");
-create_command("eenrfuart");
-create_command("enrfscan");
-create_command("eenrfscan");
+create_command("eenrfuart", 1);
 create_command("enrfpath");
+create_command("enrfscan", 1);
+create_command("eenrfscan", 1);
 my $def_priv_key = "$this_dir/bootloader/dev_priv_key.pem";
-command("nrfutil keys generate $def_priv_key") unless -f $def_priv_key;
-string_to_file("$ENV{'HOME'}/.$env_name.install",
+my $nrfutil_cmd = "$nrfutil nrf5sdk-tools";
+command("$nrfutil_cmd keys generate $def_priv_key") unless -f $def_priv_key;
+my $conf_dir = "$ENV{'HOME'}/.config/$env_name";
+mk_dir($conf_dir);
+string_to_file("$conf_dir/install",
   "# $env_name installation information\n" .
   "INSTALL_ROOT = $install_root\n" .
-  "SDK_VERSION = $def_sdk\n");
+  "SDK_VERSION = $def_sdk\n" .
+  "PATH := $py_env_dir/bin:\$(PATH)\n" .
+  "NRFUTIL = $nrfutil_cmd\n");
 
 print "\n";
 print "==== Installation completed ==== \n";
