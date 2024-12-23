@@ -105,7 +105,7 @@ sub create_command {
   my $dst = "$bin_dir/$_[0]";
   command("sudo rm $dst") if -e $dst;
   if ($_[1]) {
-    command("sudo sh -c 'echo $py_env_dir/bin/python3 $this_dir/tools/$_[0] \"\$\@\" >$dst'");
+    command("sudo sh -c 'echo $py_env_dir/bin/python3 $this_dir/tools/$_[0] \\\"\\\$\@\\\" >$dst'");
     command("sudo chmod +x $dst");
   } else {
     command("sudo ln -s -f $this_dir/tools/$_[0] $dst");
