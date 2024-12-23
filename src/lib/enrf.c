@@ -924,7 +924,7 @@ size_t enrf_serial_read(char *str, size_t max_length) {
   if (!m_input_available) {
     return 0;
   }
-  size_t len = MIN(max_length - 1, MAX(1, m_input_pos));
+  size_t len = MIN(max_length - 1, m_input_pos);
   strncpy(str, m_input_buffer, len);
   str[len] = 0;
   m_input_pos = 0;
