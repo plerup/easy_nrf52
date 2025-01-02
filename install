@@ -21,6 +21,7 @@ use Cwd 'abs_path';
 my $env_name = "easy_nrf52";
 my $this_dir = dirname(abs_path(__FILE__));
 my $bin_dir = "/usr/local/bin";
+my $lib_dir = "/usr/lib/x86_64-linux-gnu";
 my $py_env_dir;
 
 my $gcc_version = "gcc-arm-none-eabi-10.3-2021.10";
@@ -114,6 +115,15 @@ sub create_command {
 
 #--------------------------------------------------------------------
 
+sub fix_missing {
+  my ($dst, $alt) = @_;
+  if (!-e "$lib_dir/$dst" && -e "$lib_dir/$alt") {
+    command("sudo ln -sf $lib_dir/$alt $lib_dir/$dst");
+  }
+}
+
+#--------------------------------------------------------------------
+
 print "==== Installing required tools for easy_nrf52 ====\n";
 print "Admin rights are required\n";
 command("sudo echo");
@@ -196,11 +206,11 @@ if (!`which JLinkConfig`) {
 if (`which code`) {
   command("code --install-extension marus25.cortex-debug >/dev/null")
 }
-# Fix for Ubuntu 22.04 which does not have libzip 5
-my $libzip_dir = "/usr/lib/x86_64-linux-gnu";
-if (!-e "$libzip_dir/libzip.so.5" && -e "$libzip_dir/libzip.so.4") {
-  command("sudo ln -sf $libzip_dir/libzip.so.4 $libzip_dir/libzip.so.5");
-}
+# Some fixes for required libraries missing in newer Ubuntu versions
+fix_missing("libzip.so.5", "libzip.so.4");
+fix_missing("libncurses.so.5", "libncursesw.so.6.4");
+fix_missing("libtinfo.so.5", "libtinfo.so.6");
+
 print"  Creating command line commands\n";
 create_command("enrfmake");
 create_command("enrfuart");

@@ -43,6 +43,7 @@ typedef bool (*nus_rx_cb_t)(uint8_t *data, uint32_t length);
 typedef bool (*scan_report_cb_t)(ble_gap_evt_adv_report_t *);
 typedef void (*db_disc_cb_t)(ble_db_discovery_evt_t *p_evt);
 typedef void (*nus_c_rx_cb_t)(uint8_t *data, uint32_t length);
+typedef void (*serial_read_callback_t)(uint8_t b);
 
 // Initiate the BLE stack
 bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb);
@@ -112,6 +113,8 @@ const char *enrf_get_device_address();
 // Serial string I/O to uart or usb. Activated via make variable ENRF_SERIAL
 ret_code_t enrf_serial_enable(bool on);
 ret_code_t enrf_serial_write(const char *str);
+ret_code_t enrf_serial_write_data(const uint8_t *data, size_t len);
+void enrf_set_serial_read_callback(serial_read_callback_t cb);
 size_t enrf_serial_read(char *str, size_t max_length);
 bool enrf_acm_connected();
 

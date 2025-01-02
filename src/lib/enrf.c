@@ -919,6 +919,13 @@ void bytes_to_hex(uint8_t *bytes, uint32_t len, char *str) {
 static bool m_input_available = false;
 static size_t m_input_pos = 0;
 static char m_input_buffer[READ_BUFF_SIZE];
+static serial_read_callback_t m_read_cb = NULL;
+
+void enrf_set_serial_read_callback(serial_read_callback_t cb) {
+  m_read_cb = cb;
+}
+
+//--------------------------------------------------------------------------
 
 size_t enrf_serial_read(char *str, size_t max_length) {
   if (!m_input_available) {
@@ -951,6 +958,8 @@ static void usbd_user_ev_handler(app_usbd_event_type_t event);
 
 static bool m_acm_connected = false;
 
+static volatile bool m_acm_tx_done = false;
+
 APP_USBD_CDC_ACM_GLOBAL_DEF(m_app_cdc_acm,
                             cdc_acm_user_ev_handler,
                             CDC_ACM_COMM_INTERFACE,
@@ -977,21 +986,27 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst,
       m_acm_connected = false;
       break;
     case APP_USBD_CDC_ACM_USER_EVT_TX_DONE:
+      m_acm_tx_done = true;
       break;
     case APP_USBD_CDC_ACM_USER_EVT_RX_DONE: {
-      ret_code_t ret;
-      do {
-        if (!m_input_available && rx_buffer[0] != '\r') {
-          if (rx_buffer[0] == '\n' || m_input_pos >= READ_BUFF_SIZE) {
-            m_input_available = true;
-          } else {
-            m_input_buffer[m_input_pos++] = rx_buffer[0];
+      if (m_read_cb) {
+        do {
+          m_read_cb(rx_buffer[0]);
+        } while (app_usbd_cdc_acm_read(&m_app_cdc_acm, rx_buffer, READ_SIZE) == NRF_SUCCESS);
+      } else {
+        ret_code_t ret;
+        do {
+          if (!m_input_available && rx_buffer[0] != '\r') {
+            if (rx_buffer[0] == '\n' || m_input_pos >= READ_BUFF_SIZE) {
+              m_input_available = true;
+            } else {
+              m_input_buffer[m_input_pos++] = rx_buffer[0];
+            }
           }
-        }
-        // Fetch data until internal buffer is empty
-        ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, rx_buffer, READ_SIZE);
-      } while (ret == NRF_SUCCESS);
-
+          // Fetch data until internal buffer is empty
+          ret = app_usbd_cdc_acm_read(&m_app_cdc_acm, rx_buffer, READ_SIZE);
+        } while (ret == NRF_SUCCESS);
+      }
       break;
     }
     default:
@@ -1044,17 +1059,32 @@ ret_code_t enrf_serial_enable(bool on) {
 
 //--------------------------------------------------------------------------
 
-ret_code_t enrf_serial_write(const char *str) {
+#define MILLIS (uint32_t)((uint64_t)NRF_RTC0->COUNTER * 1000 / APP_TIMER_CLOCK_FREQ)
+
+ret_code_t enrf_serial_write_data(const uint8_t *data, size_t len) {
   ret_code_t res = NRF_SUCCESS;
   if (m_serial_active) {
-    for (int i = 0; i < strlen(str); i++) {
-      do {
-        res = app_usbd_cdc_acm_write(&m_app_cdc_acm, str + i, 1);
-        app_usbd_event_queue_process();
-      } while (res == NRF_ERROR_BUSY);
+    m_acm_tx_done = false;
+    do {
+      res = app_usbd_cdc_acm_write(&m_app_cdc_acm, data, len);
+      app_usbd_event_queue_process();
+    } while (res == NRF_ERROR_BUSY);
+    uint32_t start = MILLIS;
+    while (!m_acm_tx_done) {
+      app_usbd_event_queue_process();
+      if ((MILLIS - start) > 1000) {
+        // APP_USBD_CDC_ACM_USER_EVT_TX_DONE seems not to be delivered sometimes.
+        // Avoid lockup here
+        break;
+      }
     }
   }
   return res;
+}
+//--------------------------------------------------------------------------
+
+ret_code_t enrf_serial_write(const char *str) {
+  return enrf_serial_write_data((const uint8_t *)str, strlen(str));
 }
 
 //--------------------------------------------------------------------------
