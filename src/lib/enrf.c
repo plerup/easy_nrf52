@@ -997,10 +997,9 @@ static void cdc_acm_user_ev_handler(app_usbd_class_inst_t const *p_inst,
         ret_code_t ret;
         do {
           if (!m_input_available && rx_buffer[0] != '\r') {
+            m_input_buffer[m_input_pos++] = rx_buffer[0];
             if (rx_buffer[0] == '\n' || m_input_pos >= READ_BUFF_SIZE) {
               m_input_available = true;
-            } else {
-              m_input_buffer[m_input_pos++] = rx_buffer[0];
             }
           }
           // Fetch data until internal buffer is empty
@@ -1104,10 +1103,9 @@ static void uart_event_handler(app_uart_evt_t *p_event) {
     case APP_UART_DATA_READY:
       app_uart_get(&ch);
       if (!m_input_available && ch != '\r') {
+        m_input_buffer[m_input_pos++] = ch;
         if (ch == '\n' || m_input_pos >= READ_BUFF_SIZE) {
           m_input_available = true;
-        } else {
-          m_input_buffer[m_input_pos++] = ch;
         }
       }
       break;
