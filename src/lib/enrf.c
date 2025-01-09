@@ -703,7 +703,7 @@ ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_
 
 ret_code_t enrf_enable_char_notif(uint16_t cccd_handle, bool enable) {
   uint8_t buf[BLE_CCCD_VALUE_LEN];
-  buf[0] = enable ? BLE_GATT_HVX_NOTIFICATION : 0;
+  buf[0] = enable ? BLE_GATT_HVX_NOTIFICATION | BLE_GATT_HVX_INDICATION : 0;
   buf[1] = 0;
   const ble_gattc_write_params_t write_params = {
     .write_op = BLE_GATT_OP_WRITE_REQ,

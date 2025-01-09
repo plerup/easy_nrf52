@@ -81,6 +81,8 @@ uint8_t enrf_adv_parse(ble_gap_evt_adv_report_t *p_adv_report, uint8_t start_tag
 // Set parameters for next connection
 void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint16_t slave_latency,
                                 float sup_timeout_ms);
+// Add uuid for discovery on connect
+ret_code_t enrf_add_uuid(const char *uuid);
 // Connect and optionally initiate as a Nordic UART client
 ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_cb_t nus_c_rx_cb);
 // Enable notifications on the specified characteristics cccd handle
