@@ -515,7 +515,7 @@ endif
 	$(NRFUTIL) keys display --key pk --format code $(PRIV_KEY_FILE) --out_file $@
 
 gen_priv_key:
-	$(NRFUTIL) keys generate $(PROJ_PRIV_KEY_NAME)
+	$(NRFUTIL) keys generate $(PRIV_KEY_FILE)
 
 # Nordic dfu zip
 DFU_ZIP ?= $(PROJ_NAME)_$(BOARD)_dfu.zip
@@ -535,6 +535,7 @@ DFU_DEST = $(if $(DFU_BLE),$(DFU_ADDR),$(DFU_PORT))
 DFU_PAR = $(if $(findstring ble,$(BL_COM)),-b $(DFU_DEST),-t serial -p $(DFU_DEST))
 PORT_DEF ?= ACM
 DFU_PORT ?= $(shell ls -1tr /dev/tty$(PORT_DEF)* 2>/dev/null | tail -1)
+.PHONY: dfu
 dfu:
 ifeq ($(DFU_DEST),)
 	@echo == Error: DFU destination not specified
