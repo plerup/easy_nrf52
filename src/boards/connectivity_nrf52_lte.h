@@ -9,14 +9,14 @@
 
 #include "nrf_gpio.h"
 
-#define LEDS_NUMBER 1
+#define LEDS_NUMBER 4
 
 #define LED_1 NRF_GPIO_PIN_MAP(0, 27)
 
 #define LEDS_ACTIVE_STATE 1
 
 #define LEDS_LIST \
-  { LED_1 }
+  { LED_1, LED_1, LED_1, LED_1 }
 
 #define LEDS_INV_MASK !LEDS_MASK
 

@@ -124,7 +124,7 @@ $(DEF_MAKE): $(TEMPLATE_MAKE_LIST) $(MAKEFILE_LIST) $(DEF_MAKE_CMD) | $(BUILD_RO
 ifndef SDK_CONFIG
   # Generate a merged sdk config file from templates
   SDK_CONFIG = $(BUILD_ROOT)/sdk_config.h
-  SDK_TEMPLATES = $(TEMPLATE_DIR_PERI)/config/sdk_config.h $(TEMPLATE_DIR_CENT)/config/sdk_config.h
+  SDK_TEMPLATES ?= $(TEMPLATE_DIR_PERI)/config/sdk_config.h $(TEMPLATE_DIR_CENT)/config/sdk_config.h
   MERGE_CONF_CMD = $(TOOLS_DIR)/merge_config.pl
   $(SDK_CONFIG): $(MERGE_CONF_CMD) $(SDK_TEMPLATES) $(MAKEFILE_LIST)
 		$(PERL) $(MERGE_CONF_CMD) $(SDK_TEMPLATES) >$(SDK_CONFIG)
