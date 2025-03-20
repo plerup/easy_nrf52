@@ -18,6 +18,8 @@ use strict;
 use File::Basename;
 use Cwd 'abs_path';
 
+$| = 1;
+
 my $env_name = "easy_nrf52";
 my $this_dir = dirname(abs_path(__FILE__));
 my $bin_dir = "/usr/local/bin";
@@ -44,7 +46,7 @@ sub find_sdk {
   my ($vers) = @_;
   my $main_ver = $1 if $vers =~ /^(\d+)/;
   die "Invalid version: $vers\n" unless $main_ver;
-  my $url = "https://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v$main_ver.x.x/";
+  my $url = "https://files.nordicsemi.com/artifactory/nRF5-SDK/external/nRF5_SDK_v$main_ver.x.x/";
   my $list = `wget -O - $url 2>/dev/null`;
   my $zip;
   while ($list =~ s/href\=\"(nRF5_SDK_$vers\S+.zip)\"//m) {
