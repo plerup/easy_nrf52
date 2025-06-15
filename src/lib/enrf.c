@@ -1062,7 +1062,7 @@ ret_code_t enrf_serial_enable(bool on) {
 
 ret_code_t enrf_serial_write_data(const uint8_t *data, size_t len) {
   ret_code_t res = NRF_SUCCESS;
-  if (m_serial_active) {
+  if (m_serial_active && m_acm_connected) {
     m_acm_tx_done = false;
     do {
       res = app_usbd_cdc_acm_write(&m_app_cdc_acm, data, len);
