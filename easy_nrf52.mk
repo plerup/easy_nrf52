@@ -535,6 +535,7 @@ DFU_DEST = $(if $(DFU_BLE),$(DFU_ADDR),$(DFU_PORT))
 DFU_PAR = $(if $(findstring ble,$(BL_COM)),-b $(DFU_DEST),-t serial -p $(DFU_DEST))
 PORT_DEF ?= ACM
 DFU_PORT ?= $(shell ls -1tr /dev/tty$(PORT_DEF)* 2>/dev/null | tail -1)
+DFU_COM ?= $(TOOLS_DIR)/nrfdfu $(DFU_PAR) -f $(DFU_ZIP)
 .PHONY: dfu
 dfu:
 ifeq ($(DFU_DEST),)
@@ -542,7 +543,7 @@ ifeq ($(DFU_DEST),)
 	exit 1
 endif
 	$(SUB_MAKE) dfu_zip
-	$(TOOLS_DIR)/nrfdfu $(DFU_PAR) -f $(DFU_ZIP)
+	$(DFU_COM)
 
 # Serial monitor
 MONITOR_PORT ?= $(DFU_PORT)
