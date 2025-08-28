@@ -217,7 +217,7 @@ fix_missing("libtinfo.so.5", "libtinfo.so.6");
 
 print"  Creating command line commands\n";
 create_command("enrfmake");
-create_command("enrfuart");
+create_command("enrfuart", 1);
 create_command("eenrfuart", 1);
 create_command("enrfpath");
 create_command("enrfscan", 1);
