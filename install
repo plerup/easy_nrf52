@@ -29,7 +29,7 @@ my $py_env_dir;
 my $gcc_version = "gcc-arm-none-eabi-10.3-2021.10";
 my @tool_list = (
 "https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/$gcc_version-x86_64-linux.tar.bz2",
-"https://www.nordicsemi.com/-/media/Software-and-other-downloads/Desktop-software/nRF-command-line-tools/sw/Versions-10-x-x/10-15-4/nrf-command-line-tools_10.15.4_amd64.deb",
+"https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/desktop-software/nrf-command-line-tools/sw/versions-10-x-x/10-24-2/nrf-command-line-tools_10.24.2_amd64.deb",
 );
 
 sub prompt {
@@ -61,7 +61,7 @@ sub find_sdk {
 sub command {
   #print "* @_\n";
   `@_`;
-  die "\n" if $@;
+  die "** Command failed! **\n@_\n" if $?;
 }
 
 #--------------------------------------------------------------------
@@ -78,7 +78,7 @@ sub download {
   my $dst = "$dst_dir/$name";
   print "  $name\n";
   return if -f $dst;
-  command("wget -q \"$url\" -O \"$dst\"") unless -f $dst;
+  command("wget -q \"$url\" -O \"$dst\"");
 }
 
 #--------------------------------------------------------------------
@@ -147,6 +147,11 @@ do {
   $def_sdk = prompt("Select default SDK", $sdk_names[0]);
 } while (!$sdks{$def_sdk});
 
+print "Checking/Installing required system tools...\n";
+command("sudo apt update -qq -y >/dev/null 2>&1");
+command("sudo apt install python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bzip2 unzip curl libncurses5* -qq -y >/dev/null 2>&1");
+command("sudo usermod -a -G dialout $ENV{'USER'}");
+
 my $setup_dir = $install_root . "/setup";
 mk_dir($setup_dir);
 print "Downloading SDK(s) and tools...\n";
@@ -185,14 +190,11 @@ foreach (glob("$setup_dir/*")) {
 }
 
 print "Installing...\n";
-print "  System tools\n";
-command("sudo apt update -qq -y >/dev/null 2>&1");
+print"  Packages\n";
 command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
-command("sudo apt install python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools curl libncurses5* -qq -y >/dev/null 2>&1");
-command("sudo usermod -a -G dialout $ENV{'USER'}");
 print"  Python requirements\n";
 command("python3 -m venv $py_env_dir");
-command("$py_env_dir/bin/pip -qq install pyserial bleak");
+command("$py_env_dir/bin/pip -qq install pyserial bleak aioconsole");
 print "  Nordic tools\n";
 command("curl -s https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil " .
         "-o $nrfutil");
