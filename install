@@ -149,7 +149,7 @@ do {
 
 print "Checking/Installing required system tools...\n";
 command("sudo apt update -qq -y >/dev/null 2>&1");
-command("sudo apt install python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bzip2 unzip curl libncurses5* -qq -y >/dev/null 2>&1");
+command("sudo apt install python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bluez bzip2 unzip curl libncurses5* -qq -y >/dev/null 2>&1");
 command("sudo usermod -a -G dialout $ENV{'USER'}");
 
 my $setup_dir = $install_root . "/setup";
