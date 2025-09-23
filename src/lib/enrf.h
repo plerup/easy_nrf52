@@ -132,6 +132,9 @@ void bytes_to_hex(uint8_t *bytes, uint32_t len, char *str);
 // Can be used to avoid the high current consumption in NOP-loop based nrf_delay_ms.
 void enrf_delay_ms(uint32_t ms);
 
+// Milliseconds clock
+uint32_t enrf_millis();
+
 #ifdef __cplusplus
 }
 #endif

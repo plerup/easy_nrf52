@@ -1200,6 +1200,12 @@ void enrf_delay_ms(uint32_t ms) {
 
 //--------------------------------------------------------------------------
 
+uint32_t enrf_millis() {
+  return (uint32_t)((uint64_t)NRF_RTC0->COUNTER * 1000 / APP_TIMER_CLOCK_FREQ);
+}
+
+//--------------------------------------------------------------------------
+
 bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
   ret_code_t err_code;
   m_device_name = dev_name;
