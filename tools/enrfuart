@@ -75,6 +75,13 @@ async def uart_terminal(args):
         assert nus is not None, "UART service not found"
         rx_char = nus.get_characteristic(UART_RX_CHAR_UUID)
         assert rx_char is not None, "UART RX characteristic not found"
+        # Make sure we get large MTU in Bluez, fails sometimes for some reason
+        if client._backend.__class__.__name__ == "BleakClientBlueZDBus":
+            await client._backend._acquire_mtu()
+            if rx_char.max_write_without_response_size < 21:
+                print("* Failed to increase MTU")
+
+            #assert rx_char.max_write_without_response_size > 21, "Failed to increase MTU"
         if args.string:
             for s in args.string.split(';'):
                 rx_event.clear()
@@ -85,7 +92,7 @@ async def uart_terminal(args):
                     pass
         else:
             mess = "Enter command or ctrl-c to exit"
-            message(f"Connected. {mess}")
+            message(f"Connected (MTU={rx_char.max_write_without_response_size}). {mess}")
             while True:
                 try:
                     data = await ainput()
