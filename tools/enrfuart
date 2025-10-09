@@ -13,7 +13,7 @@
 #
 
 import asyncio
-import sys, time, os
+import sys, subprocess
 import argparse
 from itertools import count, takewhile
 from typing import Iterator
@@ -61,7 +61,7 @@ async def uart_terminal(args):
             hex_data(data)
         else:
             try:
-                print(data.decode(), flush=True)
+                print(data.decode().rstrip(), flush=True)
             except UnicodeDecodeError:
                 hex_data(data)
         rx_event.set()
@@ -69,7 +69,7 @@ async def uart_terminal(args):
     #------------------------
 
     message(f"Connecting to: {args.mac_addr}...")
-    async with BleakClient(args.mac_addr, disconnected_callback=handle_disconnect, timeout=args.timeout) as client:
+    async with BleakClient(args.mac_addr, disconnected_callback=handle_disconnect, timeout=int(args.timeout)) as client:
         await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
         nus = client.services.get_service(UART_SERVICE_UUID)
         assert nus is not None, "UART service not found"
@@ -102,6 +102,8 @@ async def uart_terminal(args):
                 if not data:
                     message(mess)
                 else:
+                    if args.conv_cmd:
+                        data = subprocess.run(f"{args.conv_cmd} {data} {args.mac_addr}", stdout=subprocess.PIPE, shell=True).stdout.decode("utf-8").strip()
                     for s in sliced(data.encode("utf-8"), rx_char.max_write_without_response_size):
                         await client.write_gatt_char(rx_char, s, response=False)
 
@@ -119,6 +121,9 @@ parser.add_argument('-t', dest='timeout',
                     help='Connect timeout in seconds. Default 10')
 parser.add_argument('-q', dest='quiet', action='store_true',
                     help='Quiet mode')
+parser.add_argument('-c', dest='conv_cmd',
+                    default=None,
+                    help='Convert input with command')
 
 args = parser.parse_args()
 
