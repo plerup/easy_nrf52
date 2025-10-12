@@ -28,9 +28,21 @@ UART_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 UART_RX_CHAR_UUID = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 UART_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
+out_file = None
 
 def sliced(data: bytes, n: int) -> Iterator[bytes]:
     return takewhile(len, (data[i : i + n] for i in count(0, n)))
+
+#--------------------------------------------------------------------
+
+def err(str):
+    print("* " + str, file=sys.stderr)
+
+#--------------------------------------------------------------------
+
+def fatal(str):
+    err(str)
+    sys.exit(1)
 
 #--------------------------------------------------------------------
 
@@ -38,37 +50,41 @@ async def uart_terminal(args):
 
     rx_event = asyncio.Event()
 
-    def message(str):
+    def info(str):
         if not args.quiet:
             print("- " + str)
 
     #------------------------
 
     def handle_disconnect(_: BleakClient):
-        message("Disconnected")
+        info("Disconnected")
         for task in asyncio.all_tasks():
             task.cancel()
 
     #------------------------
 
     def hex_data(data):
-        print(hexlify(data).decode().upper(), flush=True)
+        return hexlify(data).decode().upper()
 
     #------------------------
 
     def handle_rx(_: BleakGATTCharacteristic, data: bytearray):
+        output = ""
         if args.hex_format:
-            hex_data(data)
+            output = hex_data(data)
         else:
             try:
-                print(data.decode().rstrip(), flush=True)
+                output = data.decode().rstrip().rstrip('\x00')
             except UnicodeDecodeError:
-                hex_data(data)
+                output = hex_data(data)
+        print(output, flush=True)
+        if out_file:
+            out_file.write(output + "\n")
         rx_event.set()
 
     #------------------------
 
-    message(f"Connecting to: {args.mac_addr}...")
+    info(f"Connecting to: {args.mac_addr}...")
     async with BleakClient(args.mac_addr, disconnected_callback=handle_disconnect, timeout=int(args.timeout)) as client:
         await client.start_notify(UART_TX_CHAR_UUID, handle_rx)
         nus = client.services.get_service(UART_SERVICE_UUID)
@@ -92,18 +108,20 @@ async def uart_terminal(args):
                     pass
         else:
             mess = "Enter command or ctrl-c to exit"
-            message(f"Connected (MTU={rx_char.max_write_without_response_size}). {mess}")
+            info(f"Connected (MTU={rx_char.max_write_without_response_size}). {mess}")
             while True:
                 try:
                     data = await ainput()
                 except (EOFError, KeyboardInterrupt):
-                    message("Exit...")
+                    info("Exit...")
                     break
                 if not data:
-                    message(mess)
+                    info(mess)
                 else:
                     if args.conv_cmd:
                         data = subprocess.run(f"{args.conv_cmd} {data} {args.mac_addr}", stdout=subprocess.PIPE, shell=True).stdout.decode("utf-8").strip()
+                    if out_file:
+                        out_file.write(data + "\n")
                     for s in sliced(data.encode("utf-8"), rx_char.max_write_without_response_size):
                         await client.write_gatt_char(rx_char, s, response=False)
 
@@ -117,8 +135,11 @@ parser.add_argument('-s', dest='string',
 parser.add_argument('-x', dest='hex_format', action='store_true',
                     help='Output in hex format')
 parser.add_argument('-t', dest='timeout',
-                    default=10,
-                    help='Connect timeout in seconds. Default 10')
+                    default=30,
+                    help='Connect timeout in seconds. Default 30')
+parser.add_argument('-o', dest='out_file',
+                    default=None,
+                    help='Write output to file as well')
 parser.add_argument('-q', dest='quiet', action='store_true',
                     help='Quiet mode')
 parser.add_argument('-c', dest='conv_cmd',
@@ -127,11 +148,18 @@ parser.add_argument('-c', dest='conv_cmd',
 
 args = parser.parse_args()
 
+out_file = None
+if args.out_file:
+    try:
+        out_file = open(args.out_file, "w")
+    except:
+        fatal(f"Failed to open: {args.out_file}")
+
+
 try:
     asyncio.run(uart_terminal(args))
 except BleakDeviceNotFoundError:
-    print("* Device not found")
-    sys.exit(1)
+    fatal("Device not found")
 except  KeyboardInterrupt:
     pass
 except asyncio.CancelledError:
