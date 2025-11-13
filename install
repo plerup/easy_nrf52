@@ -168,7 +168,8 @@ foreach (glob("$setup_dir/*")) {
     my $dir = "$install_root/$1";
     print "  $1\n";
     command("rm -rf $dir") if -d $dir;
-    command("unzip -q -o -d $install_root $_");
+    my $extract_dir = $dir =~ /SDK_17/ ? $dir : $install_root;
+    command("unzip -q -o -d $extract_dir $_");
     # Patch the common makefiles in order to make them use the gcc installed here
     my $mk_file = "$dir/components/toolchain/gcc/Makefile.posix";
     my $txt = file_to_string($mk_file);
