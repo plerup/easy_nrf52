@@ -546,9 +546,10 @@ endif
 	$(DFU_COM)
 
 # Serial monitor
-MONITOR_PORT ?= $(DFU_PORT)
+MONITOR_PORT ?= $(PORT_DEF)
 MONITOR_SPEED ?= 115200
-MONITOR_COM ?= $(PYTHON) -m serial.tools.miniterm -e $(MONITOR_PORT) $(MONITOR_SPEED)
+WAIT_SERIAL = $(PYTHON) $(TOOLS_DIR)/wait_serial.py $(MONITOR_PORT)
+MONITOR_COM ?= $(PYTHON) -m serial.tools.miniterm --exit-char 3 -e $(shell $(WAIT_SERIAL) $(MONITOR_PORT)) $(MONITOR_SPEED)
 monitor:
 ifneq ($(ENRF_SERIAL),)
 	$(MONITOR_COM)
@@ -560,7 +561,6 @@ endif
 
 run:
 	$(SUB_MAKE) build_flash
-	sleep 2
 	$(SUB_MAKE) monitor
 
 # Other build options
