@@ -123,6 +123,9 @@ static bool        m_long_range = false;
 static int         m_tx_power = 0;
 static bool        m_serial_active = false;
 
+static volatile bool m_disconnected = true;
+static volatile bool m_timeout = false;
+
 __WEAK void assert_nrf_callback(uint16_t line_num, const uint8_t *p_file_name) {
   app_error_handler(0xDEADBEEF, line_num, p_file_name);
 }
@@ -320,6 +323,7 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
         sd_ble_gap_adv_start(m_adv_handle, APP_BLE_CONN_CFG_TAG);
       }
       m_is_central = false;
+      m_disconnected = true;
       break;
 
     case BLE_GAP_EVT_PHY_UPDATE_REQUEST: {
@@ -357,6 +361,7 @@ static void ble_evt_handler(ble_evt_t const *p_ble_evt, void *p_context) {
       } else if (p_gap_evt->params.timeout.src == BLE_GAP_TIMEOUT_SRC_CONN) {
         NRF_LOG_ERROR("Connection Request timed out");
       }
+      m_timeout = true;
       break;
     }
 
@@ -635,12 +640,6 @@ uint8_t enrf_adv_parse(ble_gap_evt_adv_report_t *p_adv_report,
 
 //--------------------------------------------------------------------------
 
-ret_code_t enrf_disconnect() {
-  return sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-}
-
-//--------------------------------------------------------------------------
-
 void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint16_t slave_latency,
                                 float sup_timeout_ms) {
   m_connection_param.min_conn_interval = MSEC_TO_UNITS(min_con_int_ms, UNIT_1_25_MS);
@@ -683,7 +682,10 @@ static void ble_nus_c_evt_handler(ble_nus_c_t *p_ble_nus_c, const ble_nus_c_evt_
 
 //--------------------------------------------------------------------------
 
-ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_cb_t nus_c_rx_cb) {
+static ret_code_t enrf_connect(ble_gap_addr_t *addr,
+                               db_disc_cb_t disc_cb,
+                               nus_c_rx_cb_t nus_c_rx_cb,
+                               uint32_t timeout_s) {
   static bool nus_init = false;
   m_disc_cb = disc_cb;
   m_nus_c_rx_cb = nus_c_rx_cb;
@@ -694,10 +696,62 @@ ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_
     nus_init = true;
   }
   m_is_central = true;
-  m_scan_params.timeout = 0;
+  m_scan_params.timeout = timeout_s * 100;
   m_scan_params.extended = m_long_range ? 1 : 0;
   m_scan_params.scan_phys = m_long_range ? BLE_GAP_PHY_CODED : BLE_GAP_PHY_AUTO;
   return sd_ble_gap_connect(addr, &m_scan_params, &m_connection_param, APP_BLE_CONN_CFG_TAG);
+}
+
+//--------------------------------------------------------------------------
+
+ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_cb_t nus_c_rx_cb) {
+  return enrf_connect(addr, disc_cb, nus_c_rx_cb, 0);
+}
+
+//--------------------------------------------------------------------------
+
+bool enrf_connect_wait(ble_gap_addr_t *addr,
+                       db_disc_cb_t disc_cb,
+                       nus_c_rx_cb_t nus_c_rx_cb,
+                       bool *ready_ind,
+                       uint32_t timeout_s,
+                       uint32_t max_tries) {
+  *ready_ind = false;
+  uint32_t tries = 0;
+  m_disconnected = true;
+  m_timeout = false;
+  while (!*ready_ind && !m_timeout) {
+    if (m_disconnected) {
+      m_disconnected = false;
+      tries++;
+      if (tries > 1) {
+        sd_ble_gap_connect_cancel();
+      }
+      if ((tries > max_tries) || (enrf_connect(addr, disc_cb, nus_c_rx_cb, timeout_s) != NRF_SUCCESS)) {
+        break;
+      }
+    }
+    enrf_wait_for_event();
+  }
+  return *ready_ind;
+}
+
+//--------------------------------------------------------------------------
+
+ret_code_t enrf_disconnect() {
+  return sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+}
+
+//--------------------------------------------------------------------------
+
+bool enrf_disconnect_wait(uint32_t timeout_s) {
+  enrf_disconnect();
+  // Wait for disconnection
+  uint32_t cnt = 0;
+  while (enrf_is_connected() && (cnt < timeout_s * 10)) {
+    enrf_delay_ms(100);
+  }
+  return !enrf_is_connected();
 }
 
 //--------------------------------------------------------------------------

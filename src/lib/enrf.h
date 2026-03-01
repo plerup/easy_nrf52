@@ -61,9 +61,6 @@ ret_code_t enrf_start_advertise(bool connectable,
                                 nus_rx_cb_t nus_cb);
 ret_code_t enrf_stop_advertise();
 
-bool enrf_is_connected();
-ret_code_t enrf_disconnect();
-
 // Send data from NUS server
 ret_code_t enrf_nus_data_send(const uint8_t *data, uint32_t length);
 ret_code_t enrf_nus_string_send(const char *str);
@@ -85,6 +82,18 @@ void enrf_set_connection_params(float min_con_int_ms, float max_con_int_ms, uint
 ret_code_t enrf_add_uuid(const char *uuid);
 // Connect and optionally initiate as a Nordic UART client
 ret_code_t enrf_connect_to(ble_gap_addr_t *addr, db_disc_cb_t disc_cb, nus_c_rx_cb_t nus_c_rx_cb);
+// Same as above but waits for a variable to be set or timeout. Also handle possible initial
+// disconnection and retries connect
+bool enrf_connect_wait(ble_gap_addr_t *addr,
+                       db_disc_cb_t disc_cb,
+                       nus_c_rx_cb_t nus_c_rx_cb,
+                       bool *ready_ind,
+                       uint32_t timeout_s,
+                       uint32_t max_tries);
+bool enrf_is_connected();
+ret_code_t enrf_disconnect();
+bool enrf_disconnect_wait(uint32_t timeout_s);
+
 // Enable notifications on the specified characteristics cccd handle
 ret_code_t enrf_enable_char_notif(uint16_t cccd_handle, bool enable);
 // Write characteristics data using the specified write-op
