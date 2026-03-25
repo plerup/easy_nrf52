@@ -549,7 +549,7 @@ endif
 MONITOR_PORT ?= $(PORT_DEF)
 MONITOR_SPEED ?= 115200
 WAIT_SERIAL = $(PYTHON) $(TOOLS_DIR)/wait_serial.py $(MONITOR_PORT)
-MONITOR_COM ?= $(PYTHON) -m serial.tools.miniterm --exit-char 3 -e $(shell $(WAIT_SERIAL) $(MONITOR_PORT)) $(MONITOR_SPEED)
+MONITOR_COM ?= $(PYTHON) $(TOOLS_DIR)/miniterm.py --exit-char 3 -e $(shell $(WAIT_SERIAL) $(MONITOR_PORT)) $(MONITOR_SPEED)
 monitor:
 ifneq ($(ENRF_SERIAL),)
 	$(MONITOR_COM)

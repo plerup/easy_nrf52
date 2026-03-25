@@ -144,6 +144,10 @@ or to build (when needed) and then start the monitor:
 
 It is also possible to use functionality for serial input and output via either the uart or the usb interface on the nrf52. This is enabled via *ENRF_SERIAL=uart* or *ENRF_SERIAL=usb* . Check the the *ble_tool* example for more info on this.
 
+The terminal used is the Python "miniterm". It is however a patched version of this which enables possible modification of the output lines (none by default) but also avoids the port lockup which normally happens when the nrf usb uart is turned off. Check out *tools/miniterm.py* for more information.
+
+It is also possible to use another terminal by defining the variable **MONITOR_COM**.
+
 #### Bootloader
 
 easy_nrf52 will automically build and flash the standard Nordic bootloaders. Which one to use is controlled by the following variables:
