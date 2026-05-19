@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/usr/bin/env bash
 #====================================================================================
 # install
 #
@@ -9,233 +9,343 @@
 # General and full license information is available at:
 #    https://github.com/plerup/easy_nrf52
 #
-# Copyright (c) 2022-2024 Peter Lerup. All rights reserved.
+# Copyright (c) 2022-2026 Peter Lerup. All rights reserved.
 #
 #====================================================================================
 
-use strict;
+set -e
+shopt -s nullglob
 
-use File::Basename;
-use Cwd 'abs_path';
+env_name=easy_nrf52
+this_dir=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+lib_dir=/usr/lib/x86_64-linux-gnu
+py_env_dir=""
+cmd_out=/tmp/_com_out.txt
 
-$| = 1;
+gcc_version=gcc-arm-none-eabi-10.3-2021.10
+tool_list=(
+"https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/$gcc_version-x86_64-linux.tar.bz2"
+"https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/desktop-software/nrf-command-line-tools/sw/versions-10-x-x/10-24-2/nrf-command-line-tools_10.24.2_amd64.deb"
+)
 
-my $env_name = "easy_nrf52";
-my $this_dir = dirname(abs_path(__FILE__));
-my $bin_dir = "/usr/local/bin";
-my $lib_dir = "/usr/lib/x86_64-linux-gnu";
-my $py_env_dir;
-
-my $gcc_version = "gcc-arm-none-eabi-10.3-2021.10";
-my @tool_list = (
-"https://developer.arm.com/-/media/Files/downloads/gnu-rm/10.3-2021.10/$gcc_version-x86_64-linux.tar.bz2",
-"https://nsscprodmedia.blob.core.windows.net/prod/software-and-other-downloads/desktop-software/nrf-command-line-tools/sw/versions-10-x-x/10-24-2/nrf-command-line-tools_10.24.2_amd64.deb",
-);
-
-sub prompt {
-  my ($mess, $def) = @_;
-  print $mess, " [$def]: ";
-  my $resp = <STDIN>;
-  $resp =~ s/\s*$//;
-  return $resp || $def;
+error() {
+  echo "* Error: $@" 1>&2
+  exit 1
 }
 
 #--------------------------------------------------------------------
 
-sub find_sdk {
-  my ($vers) = @_;
-  my $main_ver = $1 if $vers =~ /^(\d+)/;
-  die "Invalid version: $vers\n" unless $main_ver;
-  my $url = "https://files.nordicsemi.com/artifactory/nRF5-SDK/external/nRF5_SDK_v$main_ver.x.x/";
-  my $list = `wget -O - $url 2>/dev/null`;
-  my $zip;
-  while ($list =~ s/href\=\"(nRF5_SDK_$vers\S+.zip)\"//m) {
-    $zip = "$url$1" unless $1 =~ /_doc/;
+prompt() {
+  local mess="$1"
+  local def="$2"
+  if [[ $use_defaults -eq 1 ]]; then
+    printf "%s" "$def"
+    return
+  fi
+  local resp
+  printf "%s [%s]: " "$mess" "$def" >&2
+  IFS= read -r resp
+  resp="${resp%"${resp##*[![:space:]]}"}"
+  printf "%s" "${resp:-$def}"
+}
+
+#--------------------------------------------------------------------
+
+find_sdk() {
+  local vers="$1"
+  local main_ver
+  local url
+  local list
+  local zip
+  local m
+
+  if [[ "$vers" =~ ^([0-9]+) ]]; then
+    main_ver="${BASH_REMATCH[1]}"
+  else
+    error "Invalid version: $vers"
+  fi
+
+  url="https://files.nordicsemi.com/artifactory/nRF5-SDK/external/nRF5_SDK_v${main_ver}.x.x/"
+  list="$(wget -O - "$url" 2>/dev/null)"
+  zip=""
+
+  while [[ "$list" =~ href=\"(nRF5_SDK_${vers}[^[:space:]\"]+\.zip)\" ]]; do
+    m="${BASH_REMATCH[1]}"
+    [[ "$m" != *_doc* ]] && zip="$url$m"
+    list="${list#*"${BASH_REMATCH[0]}"}"
+  done
+
+  if [[ -z "$zip" ]]; then
+    error "Unable to find version: $vers"
+  fi
+
+  printf "%s" "$zip"
+}
+
+#--------------------------------------------------------------------
+
+silent_command() {
+  # Run command without any output unless error occurs
+  set +e
+  "$@" >$cmd_out 2>&1
+  if [[ $? -ne 0 ]]; then
+    echo "** Command failed! $@ **"
+    cat $cmd_out
+    exit 1
+  fi
+  set -e
+}
+
+#--------------------------------------------------------------------
+
+in_path() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+#--------------------------------------------------------------------
+
+mk_dir() {
+  [ -d $1 ] || mkdir -p $1
+}
+
+#--------------------------------------------------------------------
+
+download() {
+  local url="$1"
+  local dst_dir="$2"
+  local name
+  local dst
+
+  name="$(basename "$url")"
+  dst="$dst_dir/$name"
+  echo "  $name"
+  [[ -f "$dst" ]] && return
+  silent_command wget -q "$url" -O "$dst"
+}
+
+#--------------------------------------------------------------------
+
+string_to_file() {
+  local path="$1"
+  local content="$2"
+  printf "%s" "$content" > "$path"
+}
+
+#--------------------------------------------------------------------
+
+file_to_string() {
+  local path="$1"
+  [[ -f "$path" ]] || {
+    printf ""
+    return
   }
-  die "Unable to find version $vers\n" unless $zip;
-  return $zip;
+  cat "$path"
 }
 
 #--------------------------------------------------------------------
 
-sub command {
-  #print "* @_\n";
-  `@_`;
-  die "** Command failed! **\n@_\n" if $?;
+create_command() {
+  # Create shortcut for specified command
+  local dst="$bin_dir/$1"
+  [[ -e "$dst" ]] && rm "$dst"
+  if [[ -n "$2" ]]; then
+    echo $py_env_dir/bin/python3 $src_dir/tools/$1 \"\\\$@\" >$dst
+    chmod +x "$dst"
+  else
+    ln -s -f "$src_dir/tools/$1" "$dst"
+  fi
 }
 
 #--------------------------------------------------------------------
 
-sub mk_dir {
-  command("mkdir -p @_");
+fix_missing() {
+  # Fix for missing files in Ubuntu
+  local dst="$1"
+  local alt="$2"
+
+  if [[ ! -e "$lib_dir/$dst" && -e "$lib_dir/$alt" ]]; then
+    $sudo ln -sf "$lib_dir/$alt" "$lib_dir/$dst"
+  fi
 }
 
 #--------------------------------------------------------------------
 
-sub download {
-  my ($url, $dst_dir) = @_;
-  my $name = basename($url);
-  my $dst = "$dst_dir/$name";
-  print "  $name\n";
-  return if -f $dst;
-  command("wget -q \"$url\" -O \"$dst\"");
-}
+echo "==== Installing required tools for easy_nrf52 ===="
 
-#--------------------------------------------------------------------
+use_defaults=0
+bin_dir=~/.local/bin
+home_dir=$(getent passwd "$(id -u)" | cut -d: -f6)
+install_root="$home_dir/.$env_name"
+src_dir=$this_dir
 
-sub string_to_file {
-  my $f;
-  open($f, ">$_[0]") || return 0;
-  print $f $_[1];
-  close($f);
-  return 1;
-}
+if [[ $EUID -eq 0 ]]; then
+  sudo=""
+  is_root=1
+else
+  sudo="sudo"
+  echo "Admin rights are required"
+  $sudo echo >/dev/null
+fi
 
-#--------------------------------------------------------------------
+# Possible command parameters
+for arg in "$@"; do
+  if [[ "$arg" == "--use_defaults" ]]; then
+    use_defaults=1
+  elif [[ "$arg" == "--global" ]]; then
+    if [[ ! -v is_root ]]; then
+      # Global install as root
+      exec sudo "$(realpath "$0")" "$@"
+    fi
+    bin_dir=/usr/local/bin
+    install_root=/opt/$env_name
+    global_install=1
+    echo Global installation will be made
+  else
+    error "Unknown option $arg"
+  fi
+done
 
-sub file_to_string {
-  local($/);
-  my $f;
-  open($f, $_[0]) || return "";
-  my $res = <$f>;
-  close($f);
-  return $res;
-}
+if [[ ! -v global_install ]]; then
+  install_root="$(prompt "Installation root directory" "$install_root")"
+fi
+sdk_list="$(prompt "Nordic SDK version(s)" "15 17")"
+declare -A sdks
+echo "Validating SDKs..."
+# wget must be available
+if ! in_path wget; then
+  silent_command $sudo apt-get update
+  silent_command $sudo apt-get install wget -y
+fi
+for s in $sdk_list; do
+  sdks["$s"]="$(find_sdk "$s")"
+done
+mapfile -t sdk_names < <(printf '%s\n' "${!sdks[@]}" | sort)
+while true; do
+  def_sdk="$(prompt "Select default SDK" "${sdk_names[0]}")"
+  [[ -n "${sdks[$def_sdk]}" ]] && break
+done
 
-#--------------------------------------------------------------------
+SECONDS=0
+nrfutil="$install_root/nrfutil"
+py_env_dir="$install_root/python_env"
+echo "Checking/Installing required system tools..."
+silent_command $sudo apt-get update
+export DEBIAN_FRONTEND="noninteractive"
+silent_command $sudo apt install perl python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bluez bzip2 unzip curl libncurses5\* -y
+$sudo usermod -a -G dialout $(whoami)
 
-sub create_command {
-  my $dst = "$bin_dir/$_[0]";
-  command("sudo rm $dst") if -e $dst;
-  if ($_[1]) {
-    command("sudo sh -c 'echo $py_env_dir/bin/python3 $this_dir/tools/$_[0] \\\"\\\$\@\\\" >$dst'");
-    command("sudo chmod +x $dst");
-  } else {
-    command("sudo ln -s -f $this_dir/tools/$_[0] $dst");
-  }
-}
+mk_dir "$install_root"
+if [[ ! -f $this_dir/easy_nrf52.mk ]] || [[ -v global_install ]]; then
+  # Copy from git and put installed tools in a subdirectory
+  src_dir=$install_root
+  install_root=$install_root/inst_tools
+  mk_dir "$install_root"
+  rm -rf "$install_root"
+  tmp_zip=/tmp$env_name.zip
+  tmp_dir=/tmp/$env_name
+  echo "Downloading easy_nrf52 from gitHub..."
+  wget -q "https://github.com/plerup/easy_nrf52/archive/refs/heads/master.zip" -O $tmp_zip
+  unzip -q -o -d "$tmp_dir" "$tmp_zip"
+  mv $tmp_dir/easy_nrf52-master/* -t "$src_dir/"
+  unlink "$tmp_zip"
+else
+  src_dir=$this_dir
+fi
 
-#--------------------------------------------------------------------
+setup_dir="$install_root/setup"
+mk_dir "$setup_dir"
+echo "Downloading SDK(s) and build tools..."
+for s in "${sdk_names[@]}"; do
+  download "${sdks[$s]}" "$setup_dir"
+done
+for t in "${tool_list[@]}"; do
+  download "$t" "$setup_dir"
+done
 
-sub fix_missing {
-  my ($dst, $alt) = @_;
-  if (!-e "$lib_dir/$dst" && -e "$lib_dir/$alt") {
-    command("sudo ln -sf $lib_dir/$alt $lib_dir/$dst");
-  }
-}
+echo "Unpacking..."
+for f in "$setup_dir"/*; do
+  if [[ "$f" == *nRF5_SDK* ]]; then
+    if [[ "$f" =~ ([^/]+)\.zip ]]; then
+      dir="$install_root/${BASH_REMATCH[1]}"
+      printf "  %s\n" "${BASH_REMATCH[1]}"
+      [[ -d "$dir" ]] && rm -rf "$dir"
+      extract_dir="$install_root"
+      [[ "$dir" == *SDK_17* ]] && extract_dir="$dir"
+      silent_command unzip -q -o -d "$extract_dir" "$f"
 
-#--------------------------------------------------------------------
+      mk_file="$dir/components/toolchain/gcc/Makefile.posix"
+      txt="$(file_to_string "$mk_file")"
+      txt="$(printf "%s" "$txt" | sed -E "s|(GNU_INSTALL_ROOT [^=]=).*|\1 $install_root/$gcc_version/bin/|")"
+      string_to_file "$mk_file" "$txt"
 
-print "==== Installing required tools for easy_nrf52 ====\n";
-print "Admin rights are required\n";
-command("sudo echo");
+      mk_file="$dir/components/toolchain/gcc/Makefile.common"
+      txt="$(file_to_string "$mk_file")"
+      txt="$(printf "%s" "$txt" | sed 's/mkdir/mkdir -p/')"
+      string_to_file "$mk_file" "$txt"
+    fi
+  elif [[ "$f" == *gcc-arm* ]]; then
+    tar="${f%.bz*}"
+    printf "  %s\n" "$(basename "$tar")"
+    rm -rf "$install_root"/gcc-arm\*
+    silent_command bunzip2 -k "$f"
+    silent_command tar -xf "$tar" -C "$install_root"
+    rm "$tar"
+  fi
+done
 
-my $install_root = prompt("Installation root directory", "$ENV{'HOME'}/.$env_name");
-my $sdk_list = prompt("Nordic SDK version(s)", "15 17");
-my $nrfutil = "$install_root/nrfutil";
+echo "Installing..."
+echo "  Packages"
+silent_command $sudo dpkg -i "$setup_dir"/*.deb
+silent_command $sudo dpkg -i "$src_dir/tools"/*.deb
+echo "  Python requirements"
+silent_command python3 -m venv "$py_env_dir"
+silent_command "$py_env_dir/bin/pip" -qq install pyserial bleak aioconsole pynrfjprog
+echo "  Nordic tools"
+silent_command curl -s https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil -o "$nrfutil"
+chmod +x "$nrfutil"
+silent_command "$nrfutil" install -f device nrf5sdk-tools
+if ! in_path JLinkConfig; then
+  jlink_deb="/tmp/JLink_Linux_x86_64.deb"
+  silent_command curl -s -X POST https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.deb -H "Content-Type: application/x-www-form-urlencoded" -d "accept_license_agreement=accepted" -o "$jlink_deb"
+  silent_command $sudo /lib/systemd/systemd-udevd -d
+  silent_command $sudo apt install "$jlink_deb" -y
+fi
+if in_path code; then
+  silent_command code --install-extension marus25.cortex-debug
+fi
 
-$py_env_dir = "$install_root/python_env";
+fix_missing "libzip.so.5" "libzip.so.4"
+fix_missing "libncurses.so.5" "libncursesw.so.6.4"
+fix_missing "libtinfo.so.5" "libtinfo.so.6"
 
-my %sdks;
-print "Validating SDKs...\n";
-foreach (split(/\s+/, $sdk_list)) {
-  $sdks{$_} = find_sdk($_), "\n";
-}
-my @sdk_names = sort keys %sdks;
-my $def_sdk;
-do {
-  $def_sdk = prompt("Select default SDK", $sdk_names[0]);
-} while (!$sdks{$def_sdk});
+echo "  Creating command line commands ($bin_dir)"
+[[ -d "$bin_dir" ]] && bin_present=1 || bin_present=0
+mk_dir "$bin_dir"
+create_command enrfmake
+create_command enrfuart 1
+create_command eenrfuart 1
+create_command enrfpath
+create_command enrfscan 1
+create_command eenrfscan 1
 
-print "Checking/Installing required system tools...\n";
-command("sudo apt update -qq -y >/dev/null 2>&1");
-command("sudo apt install python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bluez bzip2 unzip curl libncurses5* -qq -y >/dev/null 2>&1");
-command("sudo usermod -a -G dialout $ENV{'USER'}");
+def_priv_key="$src_dir/bootloader/dev_priv_key.pem"
+nrfutil_cmd="$nrfutil nrf5sdk-tools"
+[[ -f "$def_priv_key" ]] || silent_command "$nrfutil" nrf5sdk-tools keys generate "$def_priv_key"
 
-my $setup_dir = $install_root . "/setup";
-mk_dir($setup_dir);
-print "Downloading SDK(s) and tools...\n";
-foreach (@sdk_names) {
-  download($sdks{$_}, $setup_dir);
-}
-foreach (@tool_list) {
-  download($_, $setup_dir);
-}
-print "Unpacking...\n";
-foreach (glob("$setup_dir/*")) {
-  if (/nRF5_SDK/) {
-    /([^\/]+)\.zip/;
-    my $dir = "$install_root/$1";
-    print "  $1\n";
-    command("rm -rf $dir") if -d $dir;
-    my $extract_dir = $dir =~ /SDK_17/ ? $dir : $install_root;
-    command("unzip -q -o -d $extract_dir $_");
-    # Patch the common makefiles in order to make them use the gcc installed here
-    my $mk_file = "$dir/components/toolchain/gcc/Makefile.posix";
-    my $txt = file_to_string($mk_file);
-    $txt =~ s/(GNU_INSTALL_ROOT \S=).+/$1 $install_root\/$gcc_version\/bin\//;
-    string_to_file($mk_file, $txt);
-    $mk_file = "$dir/components/toolchain/gcc/Makefile.common";
-    $txt = file_to_string($mk_file);
-    $txt =~ s/mkdir/mkdir -p/;
-    string_to_file($mk_file, $txt);
-  } elsif (/gcc-arm/) {
-    /(.+)\.bz/;
-    my $tar = $1;
-    print "  ", basename($tar), "\n";
-    command("rm -rf $install_root/gcc-arm*");
-    command("bunzip2 -k $_");
-    command("tar -xf $tar -C $install_root");
-    command("rm $tar");
-  }
-}
+string_to_file "$src_dir/setup.mk" \
+"# $env_name setup information
+INSTALL_ROOT = $install_root
+SDK_VERSION = $def_sdk
+PATH := $py_env_dir/bin:\$(PATH)
+NRFUTIL = $nrfutil_cmd
+"
 
-print "Installing...\n";
-print"  Packages\n";
-command("sudo dpkg -i $setup_dir/*.deb >/dev/null");
-print"  Python requirements\n";
-command("python3 -m venv $py_env_dir");
-command("$py_env_dir/bin/pip -qq install pyserial bleak aioconsole");
-print "  Nordic tools\n";
-command("curl -s https://files.nordicsemi.com/artifactory/swtools/external/nrfutil/executables/x86_64-unknown-linux-gnu/nrfutil " .
-        "-o $nrfutil");
-command("chmod +x $nrfutil");
-command("$nrfutil install -f device nrf5sdk-tools 2>/dev/null");
-if (!`which JLinkConfig`) {
-  my $jlink_deb = "/tmp/JLink_Linux_x86_64.deb";
-  command("curl -s -X POST https://www.segger.com/downloads/jlink/JLink_Linux_x86_64.deb " .
-    "-H \"Content-Type: application/x-www-form-urlencoded\" " .
-    "-d \"accept_license_agreement=accepted\" -o $jlink_deb");
-  command("sudo apt install $jlink_deb -qq -y >/dev/null 2>&1");
-}
-if (`which code`) {
-  command("code --install-extension marus25.cortex-debug >/dev/null")
-}
-# Some fixes for required libraries missing in newer Ubuntu versions
-fix_missing("libzip.so.5", "libzip.so.4");
-fix_missing("libncurses.so.5", "libncursesw.so.6.4");
-fix_missing("libtinfo.so.5", "libtinfo.so.6");
-
-print"  Creating command line commands\n";
-create_command("enrfmake");
-create_command("enrfuart", 1);
-create_command("eenrfuart", 1);
-create_command("enrfpath");
-create_command("enrfscan", 1);
-create_command("eenrfscan", 1);
-my $def_priv_key = "$this_dir/bootloader/dev_priv_key.pem";
-my $nrfutil_cmd = "$nrfutil nrf5sdk-tools";
-command("$nrfutil_cmd keys generate $def_priv_key") unless -f $def_priv_key;
-my $conf_dir = "$ENV{'HOME'}/.config/$env_name";
-mk_dir($conf_dir);
-string_to_file("$conf_dir/install",
-  "# $env_name installation information\n" .
-  "INSTALL_ROOT = $install_root\n" .
-  "SDK_VERSION = $def_sdk\n" .
-  "PATH := $py_env_dir/bin:\$(PATH)\n" .
-  "NRFUTIL = $nrfutil_cmd\n");
-
-print "\n";
-print "==== Installation completed ==== \n";
-
-
+echo
+echo "==== Installation completed ==== "
+elapsed=$SECONDS
+minutes=$(((elapsed % 3600) / 60))
+seconds=$((elapsed % 60))
+printf "Used time: %02d:%02d\n" "$minutes" "$seconds"
+if [[ $bin_present -eq 0 ]]; then
+  echo "Run \"source ~/.profile\" to enable enrf commands in this command window"
+fi

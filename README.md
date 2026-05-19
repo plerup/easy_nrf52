@@ -1,218 +1,525 @@
-# easy NRF52
-Tools for simplified handling of the Nordic Bluetooth Low Energy SDK for nrf52 chipset (prior to NRFConnect) on Debian based Linux PC.
+# easy_nrf52
+Tools for simplified handling of the Nordic Bluetooth Low Energy SDK for the nRF52 chipset (prior to nRF Connect) on Debian-based Linux PCs.
 
-This is a tool set where I have put into my many years of experience struggling with the Nordic SDK and thereby hoping it will enable shortening of the learning curve for others. Then again the SDK has been replaced by NRFConnect but easy_nrf52 provides a more down to earth straight on approach as long as you are using the nrf52. It also facilitates building of controlled release versions of nrf52 product firmware.
+easy_nrf52 is a toolset built from many years of experience working with and struggling with the Nordic SDK. The goal is to shorten the learning curve and simplify development workflows for nRF52-based products.
 
-The basic idea is to provide easy methods for handling all the aspects of making a product based on nrf52. A makefile takes care of the building and flashing process. A source code library is provided to remove the need to duplicate the massive amount code as done in the Nordic examples. This takes some shortcuts but should be sufficient in most cases.
+Although the original Nordic SDK has now been superseded by nRF Connect SDK, easy_nrf52 provides a more straightforward and practical approach for projects that still use the classic nRF52 SDK. It also simplifies the creation of controlled firmware release builds for production devices.
 
-The build process of easy_nrf52 will automatically extract the SDK config file and source files list from the Nordic examples and use these as the template for the configuration. When needed this can be overridden in part or completely by the project configuration.
+The core idea behind easy_nrf52 is to simplify all aspects of nRF52 product development. A Makefile-based build system handles compilation and flashing, while a reusable source library reduces the need to duplicate the large amount of boilerplate code found in the Nordic SDK examples. While this approach takes some shortcuts, it is sufficient for most use cases.
 
-A main idea is to use the Nordic UART service as the channel for data exchange between units and also to a PC.
+The build process automatically extracts SDK configuration files and source file lists from Nordic SDK examples and uses them as templates for project configuration. These defaults can be partially or completely overridden by project-specific settings.
 
-A number of examples of typical applications are provided.
+One of the primary design goals is to use the Nordic UART Service (NUS) as the main communication channel between devices and PCs.
 
-Automatic handling of secure bootloader with correct signing is available and the dfu can be performed directly from a PC with Bluetooth support.
+Several example applications are included.
 
-Debugging can either be done via Visual Studio Code or from the command line via gdb.
+Automatic handling of secure bootloaders with correct signing is supported, and DFU updates can be performed directly from a Bluetooth-enabled PC.
 
-Flashing methods include Segger and STLink.
+Debugging can be performed either through Visual Studio Code or directly from the command line using GDB.
 
-The standard Nordic dev kit boards are supported as well as some others. It is also very easy to add other boards.
+Supported flashing interfaces include Segger and STLink.
 
-**Please note** The documentation here is somewhat meager for now. For better understanding check out the examples and the makefile source.
+Standard Nordic development boards are supported, along with several additional boards. Adding support for custom boards is also straightforward.
 
-The whole concept of easy_nrf52 is very equal to that of makeEspArduino (https://github.com/plerup/makeEspArduino) so if you have been using that you would feel somewhat at home.
+> **Note**
+> The documentation is still somewhat limited. For a better understanding of the framework, study the examples and Makefile sources.
 
+The overall concept of easy_nrf52 is similar to that of [makeEspArduino](https://github.com/plerup/makeEspArduino). Users familiar with that project should feel somewhat at home.
 
-#### Installing
+---
 
-Perform the installation of easy_nrf52 by starting the *install* script. This will download and install the Nordic SDKs, GCC compiler and some other tools.
+# Features
 
-The script will prompt for which SDK(s) to use. Only version 15 up to 17 are supported.
+- Simplified nRF52 SDK build system
+- Automatic SDK configuration extraction
+- Secure bootloader and DFU support
+- BLE UART tooling
+- Segger and STLink flashing support
+- Visual Studio Code integration
+- Automatic build/version metadata generation
+- Example applications included
 
-It will also prompt for a location where to put all the expanded downloads.
+---
 
-As some possible additional system installations will be required (via apt) sudo prompt will be shown.
+# Quick Start
 
-Once the installation has completed it can be tested by issuing the command:
+```bash
+wget -qO - https://github.com/plerup/easy_nrf52/raw/master/install | bash
 
-    enrfmake
+enrfmake
+enrfmake flash_all
+```
 
-This will build the example template included in easy_nrf52.
+Tested on Debian-based Linux systems.
 
-If you have a Nordic nrf52840 DK kit (pca10056) you can then issue the following command to get the softdevice, bootloader and template application into this by entering:
+---
 
-    enrfmake flash_all
+# Installation
 
-If you don't know the mac address of your board you can now find it via this command:
+There are two ways to install easy_nrf52.
 
-    enrfscan "enrf template"
+The first method is to clone this repository and run the `install` script. This downloads and installs the Nordic SDKs, GCC compiler, and additional required tools.
 
-After that you can use this command to communicate with the application:
+The second method is to download and execute the installation script directly. In this case, the repository contents are copied automatically and Git is not required.
 
-    enrfuart -b mac_addr
+Example:
 
-where mac_addr should be replaced with the address that was shown in the previous command. You can then enter the commands supported by the template application, e.g. *led* which will toggle the onboard led.
+```bash
+wget -qO - https://github.com/plerup/easy_nrf52/raw/master/install | bash
+```
 
-By entering:
+The installer prompts for:
 
-    enrfmake help
+- Which SDK versions to install (SDK 15 through 17 are supported)
+- The directory where downloaded files should be extracted
 
-a list of common build commands and their possible configuration parameters will be shown.
+A sudo password prompt may appear if additional packages need to be installed through `apt`.
 
-If you have another board this must be specified via the *BOARD* variable, e.g.:
+The installation script supports two optional parameters:
 
-    enrfmake BOARD=pca10040
+| Parameter | Description |
+|---|---|
+| `--use_defaults` | Runs the installer without prompts using default values |
+| `--global` | Installs everything under `/opt` for system-wide access |
 
-All boards defined in the Nordic SDK can be named and as well as the one in the easy_nrf52 directory src/boards. Board definitions can also be added in the project directory or in a directory defined via the variable *BOARDS_DIR*. The board header file must contain the definitions of leds and buttons. Possible makefile specifics can be define in a file with the same name but with extension .mk .
+After installation, verify the setup by running:
 
-#### Building projects
+```bash
+enrfmake
+```
 
-Arrange a project by adding your source files in a dedicated directory. You can configure what files to use either in a top make file (named Makefile as usual) or in specific configuration file named *config.mk*. Check for instance the *ble_tool* example. The default main source file that will be search for is *main.c* but this can be changed via the variable *PROJ_MAIN*
+This builds the included template example.
 
-The build can then be performed by issuing *enrfmake* in the project directory or if you have a top make file by standard *make* command. In the latter case you can add the following line to this file for automatic include of the easy_nrf52 makefile.
+If you have an nRF52840 DK (`pca10056`), flash the SoftDevice, bootloader, and example application using:
 
-    include $(shell enrfpath)
+```bash
+enrfmake flash_all
+```
 
-A typical *config.mk* may look something like this:
+To locate the MAC address of the board:
 
-    MY_SRC = $(HOME)/dev/my_proj
-    PROJ_MAIN = $(MY_SRC)/main.c
-    SRC_FILES += \
-       $(MY_SRC)/file1.c \
-       $(MY_SRC)/file2.c
-    INC_FOLDERS += $(MY_SRC)
+```bash
+enrfscan "enrf template"
+```
 
-If you need additional source files from the Nordic SDK just add them here. Possible extra or replaced SDK configuration variables can be added to a file named *app_sdk_config.h*
+You can then communicate with the device using:
 
-It is possible to use C++ files in the build but this requires that the main source files is also in C++
+```bash
+enrfuart -b mac_addr
+```
 
+Replace `mac_addr` with the detected Bluetooth address.
 
-##### Some examples
+Try entering commands supported by the example application, such as:
 
-The *src/examples* directory contains some typical examples on how to use easy_nrf52. It is recommended to study these for better understanding of the concepts of easy_nrf52.
+```text
+led
+```
 
-##### Build time and version information
+which toggles the onboard LED.
 
-The easy_nrf52 build process will also automatically produce and compile a source file which contains the actual build date and git versions of the project source files and easy_nrf52, whenever a link operation is performed. This is accessible via the global strings:
+To display available build commands and options:
 
-    extern char *_build_time, *_build_version;
+```bash
+enrfmake help
+```
 
-#### Flash operations
+To specify another board:
 
-The easy_nrf52 makefile can be used to perform all types flashing operations of a nrf52 device. Direct cable based flashing from a PC can be made via a Segger equipped programmer like the Nordic development boards pca10040 or pca10056. It can also be done via an STLink device connected to the SWIO interface of the nrf52.
+```bash
+enrfmake BOARD=pca10040
+```
 
-The following command can be used to do an initial complete reflash of the nrf52 unit:
+All boards defined in the Nordic SDK are supported, along with additional board definitions located under:
 
-    enrfmake flash_all
+```text
+src/boards
+```
 
-This will first erase the flash and UICR and then flash softdevice, bootloader and then the actual application.
+Additional board definitions can also be added:
 
-During subsequent development work the command:
+- In the project directory
+- In a directory specified via `BOARDS_DIR`
 
-    enrfmake flash
+Board header files must define LEDs and buttons. Optional board-specific Makefile settings can be placed in a corresponding `.mk` file.
 
-can be used to just reflash the application.
+---
 
-Please note that when erasing the flash of a Nordic nrf52840 dongle (pca10059), the makefile will make sure that the REGOUT0 register is always kept at 3.3V to avoid bricking the device.
+# Building Projects
 
-It is also possible to do a wireless update of the application via the DFU function on a PC with bluetooth capability, This requires that the unit has the standard Nordic bootloader which has the public key of the private key that is used to sign the application during the build. The device mac address must be specified. Example:
+Create a project by placing source files in a dedicated directory.
 
-    enrfmake DFU_ADDR=12:34:56:78:9A:BC dfu
+Build configuration can be specified either:
 
-To save the complete flash and UICR content to a file us the comand:
+- In a top-level `Makefile`
+- In a project configuration file named `config.mk`
 
-    enrfmake dump_flash
+See the `ble_tool` example for reference.
 
-The default file name is *nrf_flash.hex* but it can be changed via the variable *FLASH_FILE*
+By default, the build system searches for a source file named:
 
-The produced file can later be resored via the command:
+```text
+main.c
+```
 
-    enrfmake flash_file
+This can be overridden using the following variable:
 
-#### Monitor
+```makefile
+PROJ_MAIN
+```
 
-Builds made by easy_nrf52 will enable uart logging by default. This can be disabled by defining UART_LOG=0. In this case RTT logging will be enabled instead, same as in the Nordic examples.
+Projects can be built by running:
 
-To automatically start a terminal for monitoring the uart output use the command:
+```bash
+enrfmake
+```
 
-    enrfmake monitor
+inside the project directory.
 
-or to build (when needed) and then start the monitor:
+If using a top-level Makefile, standard `make` can also be used. Add the following line for automatic inclusion of the easy_nrf52 build system:
 
-    enrfmake run
+```makefile
+include $(shell enrfpath)
+```
 
-It is also possible to use functionality for serial input and output via either the uart or the usb interface on the nrf52. This is enabled via *ENRF_SERIAL=uart* or *ENRF_SERIAL=usb* . Check the the *ble_tool* example for more info on this.
+Example `config.mk`:
 
-The terminal used is the Python "miniterm". It is however a patched version of this which enables possible modification of the output lines (none by default) but also avoids the port lockup which normally happens when the nrf usb uart is turned off. Check out *tools/miniterm.py* for more information.
+```makefile
+MY_SRC = $(HOME)/dev/my_proj
+PROJ_MAIN = $(MY_SRC)/main.c
+SRC_FILES += \
+   $(MY_SRC)/file1.c \
+   $(MY_SRC)/file2.c
 
-It is also possible to use another terminal by defining the variable **MONITOR_COM**.
+INC_FOLDERS += $(MY_SRC)
+```
 
-#### Bootloader
+Additional Nordic SDK source files can be included as needed.
 
-easy_nrf52 will automically build and flash the standard Nordic bootloaders. Which one to use is controlled by the following variables:
+Extra or overridden SDK configuration values can be placed in:
 
-**BL_TYPE** Type of bootloader, default is secure
+```text
+app_sdk_config.h
+```
 
-**BL_COM**  Bootloader communication interface, default is ble
+C++ source files are supported, but the main source file must also be written in C++.
 
-By default a development security key is used for the secure bootloader. To generate your own unique one use:
+---
 
-    enrfmake gen_priv_key
+# Example Applications
 
+The `src/examples` directory contains several example applications demonstrating typical easy_nrf52 usage patterns.
 
-#### Misc build features
+Studying these examples is strongly recommended.
 
-##### Using ccache
+---
 
-If you want to speed up your builds with easy_nrf52 you can install ccache on your system, https://ccache.dev/
+# Build Time and Version Information
 
-Once installed easy_nrf52 will automatically use it during the build by preceding all C and C++ compilation commands with ccache. In case you have ccache installed but don't want to use it for the build, you can set the variable *USE_CCACHE=0*
+During linking, easy_nrf52 automatically generates a source file containing:
 
+- Build timestamp
+- Git revision information for both:
+  - The project
+  - easy_nrf52 itself
 
-##### Parallel builds
+These values are accessible through the global variables:
 
-The make build operation is performed using parallel build compilation threads. By default all the cores of the machine is used. You can however limit the number of compilation threads started by setting the *BUILD_THREADS* variable to a desired alternate number.
+```c
+extern char *_build_time, *_build_version;
+```
 
-##### Automatic rebuild
+---
 
-A record of the command line parameters and git versions used in the last build is stored in the build directory. If any of these are changed during the next build, e.g. changing a variable definition, a complete rebuild is made in order to ensure that all possible changes are applied. If you don't want this function just define the variable *IGNORE_STATE=1*.
+# Flash Operations
 
+easy_nrf52 supports all common nRF52 flashing operations.
 
-#### Using Visual Studio Code
+Direct cable-based flashing can be performed using:
 
-Visual Studio Code is a great editor which can be used together with easy_nrf52. The makefile contains a rule named "vscode". When invoked it will generate config files for IntellliSense, build and debug functions. The information is based on the parameters of the c/c++ compilation command.
+- Segger programmers
+- Nordic development boards
+- STLink devices connected through SWD
 
-The project will have "tasks" configuration which enables building with easy_nrf52 from within the editor. This is convenient for stepping through compilation errors for instance.
+To perform a complete device flash:
 
-For performing debugging the VS Code Addin Cortex-Debug must be installed, https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug
+```bash
+enrfmake flash_all
+```
 
-The configuration files will have settings with the name of the main sketch.
+This operation:
 
-The workspace directory for the settings files will be ".vscode" and this can either be automatically detected by easy_nrf52 or be specified via the variable *VS_CODE_DIR*. Automatic here means checking the parent directories of the sketch for a config directory and if doesn't exist then the sketch directory itself will be used and created if not found. If an existing project file (*.code-workspace) is found in that directory it will be used as input for the launch of VS Code.
+1. Erases flash and UICR
+2. Programs the SoftDevice
+3. Programs the bootloader
+4. Programs the application
 
-After generating the configuration files easy_nrf52 will launch Visual Studio (if available in the path)
+During development, the application alone can be reflashed using:
 
+```bash
+enrfmake flash
+```
 
-#### Compiler preprocessor
+When erasing an nRF52840 dongle (`pca10059`), easy_nrf52 preserves the `REGOUT0` setting at 3.3V to avoid bricking the device.
 
-Sometimes it can be useful to see the actual full source file content once all include files and macros have been expanded. The rule *preproc* is available for this purpose. The path of the source file to be analyzed is specified via the variable *SRC_FILE*. Example:
+Wireless DFU updates are also supported on Bluetooth-enabled PCs.
 
-    enrfmake preproc SRC_FILE=my_file.c
+Example:
 
+```bash
+enrfmake DFU_ADDR=12:34:56:78:9A:BC dfu
+```
 
-#### Other tools
+To save complete flash and UICR contents:
 
-The installation makes some other tools available as well on a PC with Bluetooth capability.
+```bash
+enrfmake dump_flash
+```
 
-**enrfscan** This command scans and lists all advertising Bluetooth low energy devices. Filtering can be made my supplying a match string. Advertising data will be shown together with address and rssi value.
+Default output file:
 
-**enrfuart** This implements a Nordic uart service client and can be used to connect to units with this service enabled e.g. the easy_nrf52 examples
+```text
+nrf_flash.hex
+```
 
-If you flash the example application *ble_tool* onto a nrf52840 module, e.g. the Nordic dongle pca10059, you can use this in the same way as the command above. But in this case extended MTU and long range (PHY_CODED) can be used as well. the following predefined commands are available for this setup:
+Override using:
 
-**eenrfscan** Same as above but with option for long range.
+```makefile
+FLASH_FILE
+```
 
-**eeenrfuart** Has 256 MTU and long range option.
+Restore a saved image using:
 
-Use *--help* for full description of the available options for the commands.
+```bash
+enrfmake flash_file
+```
+
+---
+
+# Monitor
+
+Builds generated by easy_nrf52 enable UART logging by default.
+
+Disable UART logging with:
+
+```makefile
+UART_LOG=0
+```
+
+This enables RTT logging instead, matching Nordic SDK example behavior.
+
+To launch a logging monitor:
+
+```bash
+enrfmake monitor
+```
+
+To build and launch automatically:
+
+```bash
+enrfmake run
+```
+
+Other application serial communication through either UART or USB can be enabled using:
+
+```makefile
+ENRF_SERIAL=uart
+```
+
+or
+
+```makefile
+ENRF_SERIAL=usb
+```
+
+See the `ble_tool` example for more information.
+
+The default terminal is a patched version of Python `miniterm`, located at:
+
+```text
+tools/miniterm.py
+```
+
+This version:
+
+- Avoids USB UART port lockups
+- Allows optional output line modification
+
+Alternative terminal applications can be selected using:
+
+```makefile
+MONITOR_COM
+```
+
+---
+
+# Bootloader
+
+easy_nrf52 automatically builds and flashes standard Nordic bootloaders.
+
+Bootloader behavior is controlled through:
+
+| Variable | Description |
+|---|---|
+| `BL_TYPE` | Bootloader type (default: `secure`) |
+| `BL_COM` | Bootloader communication interface (default: `ble`) |
+
+By default, a development signing key is used.
+
+Generate a custom private key using:
+
+```bash
+enrfmake gen_priv_key
+```
+
+---
+
+# Miscellaneous Build Features
+
+## Using ccache
+
+To accelerate builds, install [ccache](https://ccache.dev/).
+
+If detected, easy_nrf52 automatically uses it for all C/C++ compilation steps.
+
+Disable ccache usage with:
+
+```makefile
+USE_CCACHE=0
+```
+
+---
+
+## Parallel Builds
+
+Compilation is performed using parallel build threads.
+
+By default, all CPU cores are used.
+
+Limit the number of build threads using:
+
+```makefile
+BUILD_THREADS
+```
+
+---
+
+## Automatic Rebuild Detection
+
+easy_nrf52 stores previous build parameters and Git revisions.
+
+If configuration values or revisions change, a full rebuild is triggered automatically.
+
+Disable this feature with:
+
+```makefile
+IGNORE_STATE=1
+```
+
+---
+
+# Using Visual Studio Code
+
+Visual Studio Code integrates well with easy_nrf52.
+
+The Makefile includes a `vscode` rule that generates:
+
+- IntelliSense configuration
+- Build tasks
+- Debug configuration
+
+The generated configuration is based on the actual compiler command line.
+
+This enables convenient in-editor building and debugging.
+
+For debugging support, install the Cortex-Debug extension:
+
+https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug
+This is done automatically if Visual Studio Code was already installed when easy_nrf52 was installed.
+
+Generated configuration names are based on the main project source file.
+
+Workspace settings are stored under:
+
+```text
+.vscode
+```
+
+easy_nrf52 automatically searches parent directories for an existing VS Code configuration directory.
+
+The location can also be specified explicitly using:
+
+```makefile
+VS_CODE_DIR
+```
+
+If an existing `.code-workspace` file is found, it is used automatically.
+
+After generating the configuration, easy_nrf52 launches Visual Studio Code if available in the system path.
+
+---
+
+# Compiler Preprocessor
+
+To inspect fully expanded source files after preprocessing:
+
+```bash
+enrfmake preproc SRC_FILE=my_file.c
+```
+
+This expands:
+
+- Include files
+- Macros
+- Conditional compilation
+
+---
+
+# Additional Tools
+
+Several additional Bluetooth-related tools are installed and usable on a PC with Bluetooth capability.
+
+## enrfscan
+
+Scans and lists advertising BLE devices.
+
+Optional filtering can be applied using a match string.
+
+Displayed information includes:
+
+- Device address
+- RSSI
+- Advertising data
+
+---
+
+## enrfuart
+
+Implements a Nordic UART Service client for communicating with compatible devices.
+
+Works with the included example applications.
+
+---
+
+If you flash the example application *ble_tool* onto a nrf52840 module, e.g. the Nordic dongle pca10059, you can use this in the same way as the command above. But in this case extended MTU and long range (PHY_CODED) can be used as well.
+
+## eenrfscan
+
+Extended version of `enrfscan` with long-range support.
+
+---
+
+## eeenrfuart
+
+Extended UART client with:
+
+- 256-byte MTU support
+- Long-range PHY support
+
+Use:
+
+```bash
+--help
+```
+
+for complete command descriptions.

@@ -29,8 +29,8 @@ git_description = $(shell git -C $(1) describe --tags --always --dirty 2>/dev/nu
 calc = $(shell printf "0x%0X" $$(($1)))
 
 # Validate installation
-INST_FILE = $(HOME)/.config/$(ENV_NAME)/install
-ifeq ($(wildcard $(INST_FILE)),)
+INST_FILE = $(ENV_ROOT)setup.mk
+ifeq ($(INST_FILE),)
   $(error Installation has not been made or has changed. Run ./install)
 endif
 include $(INST_FILE)
@@ -348,16 +348,12 @@ OOCD_TAIL = >$(OOCD_LOG) 2>&1 || (cat $(OOCD_LOG) && exit 1)
 PROG_HW ?= segger
 ifeq ($(PROG_HW),segger)
   FLASH_COM ?= nrfjprog -f nrf52 -q
+  RTT_COM ?= $(PYTHON) $(TOOLS_DIR)/rtt_monitor.py
   ifdef SEGGER_SNR
     # Use specific Segger unit
     FLASH_COM += --snr $(SEGGER_SNR)
-    RTT_PAR = -select USB=$(SEGGER_SNR)
+    RTT_COM += --snr $(SEGGER_SNR)
   endif
-  define RTT_COM
-  	JLinkGDBServer -singlerun -nogui -if swd -port 50000 -swoport 50001 -telnetport 50002 -device nrf52 $(RTT_PAR) >/dev/null &
-  	-JLinkRTTClient </dev/null 2>/dev/null
-  	-pkill JLinkGDBServer
-  endef
   FLASH_PROG = $(FLASH_COM) --sectorerase --program $1 --reset
   define FLASH_ERASE
   	$(FLASH_COM) --eraseall
@@ -381,6 +377,7 @@ else ifeq ($(PROG_HW),stlink)
   READ_UICR = $(FLASH_COM) -c "init; mdw $(UICR_ADDR) $(UICR_SIZE)" -c " exit" 2>&1
   READ_MAC = $(FLASH_COM) -c "init; mdw $(MAC_ADDR) 2" -c " exit" 2>&1
   RESET_COM = $(FLASH_COM) -c "init; reset; exit" $(OOCD_TAIL)
+	RTT_COM = echo "* RTT is not available on stlink"
 else
   $(error Unknown programmer)
 endif
@@ -561,7 +558,7 @@ endif
 
 run:
 	$(SUB_MAKE) build_flash
-	$(SUB_MAKE) monitor
+	-$(SUB_MAKE) monitor
 
 # Other build options
 default: $(OUT_HEX)

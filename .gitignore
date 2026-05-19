@@ -2,4 +2,5 @@
 *_all.hex
 *_dfu.zip
 *.pem
+setup.mk
 
