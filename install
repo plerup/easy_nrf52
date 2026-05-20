@@ -149,7 +149,7 @@ create_command() {
   local dst="$bin_dir/$1"
   [[ -e "$dst" ]] && rm "$dst"
   if [[ -n "$2" ]]; then
-    echo $py_env_dir/bin/python3 $src_dir/tools/$1 \"\\\$@\" >$dst
+    echo $py_env_dir/bin/python3 $src_dir/tools/$1 \"\$@\" >$dst
     chmod +x "$dst"
   else
     ln -s -f "$src_dir/tools/$1" "$dst"
