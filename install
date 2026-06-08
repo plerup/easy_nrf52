@@ -231,7 +231,7 @@ py_env_dir="$install_root/python_env"
 echo "Checking/Installing required system tools..."
 silent_command $sudo apt-get update
 export DEBIAN_FRONTEND="noninteractive"
-silent_command $sudo apt install perl python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bluez bzip2 unzip curl libncurses5\* -y
+silent_command $sudo apt install perl dos2unix python3 python3-pip python3-venv ccache srecord openocd libzip-dev stlink-tools bluez bzip2 unzip curl libncurses5\* -y
 $sudo usermod -a -G dialout $(whoami)
 
 mk_dir "$install_root"
@@ -273,15 +273,22 @@ for f in "$setup_dir"/*; do
       [[ "$dir" == *SDK_17* ]] && extract_dir="$dir"
       silent_command unzip -q -o -d "$extract_dir" "$f"
 
+      # Do some necessary patching
       mk_file="$dir/components/toolchain/gcc/Makefile.posix"
+      silent_command dos2unix $mk_file
       txt="$(file_to_string "$mk_file")"
       txt="$(printf "%s" "$txt" | sed -E "s|(GNU_INSTALL_ROOT [^=]=).*|\1 $install_root/$gcc_version/bin/|")"
       string_to_file "$mk_file" "$txt"
 
       mk_file="$dir/components/toolchain/gcc/Makefile.common"
+      silent_command dos2unix $mk_file
       txt="$(file_to_string "$mk_file")"
       txt="$(printf "%s" "$txt" | sed 's/mkdir/mkdir -p/')"
       string_to_file "$mk_file" "$txt"
+
+      ecc_file="$dir/external/micro-ecc/build_all.sh"
+      silent_command dos2unix $ecc_file
+      cd $(dirname $ecc_file) && silent_command source $ecc_file
     fi
   elif [[ "$f" == *gcc-arm* ]]; then
     tar="${f%.bz*}"
