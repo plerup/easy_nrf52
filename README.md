@@ -489,7 +489,7 @@ Displayed information includes:
 
 - Device address
 - RSSI
-- Advertising data
+- Advertised manufacturer data | advertised services
 
 ---
 

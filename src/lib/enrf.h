@@ -54,12 +54,29 @@ void enrf_set_tx_power(int tx_power);
 
 //== Peripheral role functions ==
 
+// Change device name set at enrf_init
+ret_code_t enrf_set_device_name(const char *dev_name);
+
+// Advertisement
+// Possible uuids will always be put into response message
+ret_code_t enrf_start_advertise_ex(bool connectable,
+                                   uint16_t company_id,
+                                   ble_advdata_name_type_t type,
+                                   uint8_t *p_manuf_data, uint8_t manuf_data_size,
+                                   ble_uuid_t *p_uuids, uint8_t uuid_cnt,
+                                   uint32_t interval_ms, uint32_t timeout_s,
+                                   nus_rx_cb_t nus_cb);
+ret_code_t enrf_stop_advertise();
+// Add uuid to be used for advertisement
+ret_code_t enrf_uuid_from_string(const char *uuid_str, ble_uuid_t *p_uuid);
+// Get the predefined nus uuid
+ble_uuid_t *enrf_get_nus_uuid();
+// Compatibility wrapper
 ret_code_t enrf_start_advertise(bool connectable,
                                 uint16_t company_id, ble_advdata_name_type_t type,
                                 uint8_t *p_data, uint8_t size,
                                 uint32_t interval_ms, uint32_t timeout_s,
                                 nus_rx_cb_t nus_cb);
-ret_code_t enrf_stop_advertise();
 
 // Send data from NUS server
 ret_code_t enrf_nus_data_send(const uint8_t *data, uint32_t length);

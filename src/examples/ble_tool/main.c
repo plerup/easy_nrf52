@@ -57,6 +57,18 @@ static char *hex_str(uint8_t *data, uint16_t len) {
 
 //--------------------------------------------------------------------------
 
+void strtrim(char *str) {
+  if (!str || !*str) {
+    return;
+  }
+  int pos = strlen(str) - 1;
+  while (str[pos] <= ' ' && pos >= 0) {
+    str[pos--] = 0;
+  }
+}
+
+//--------------------------------------------------------------------------
+
 static void format_response(const char *form, ...) {
   char buff[255];
   va_list args;
@@ -70,12 +82,8 @@ static void format_response(const char *form, ...) {
 //--------------------------------------------------------------------------
 
 static bool nus_data_received(uint8_t *data, uint32_t length) {
-  strlcpy(m_char_buff, (const char*)data, MIN(sizeof(m_char_buff), length));
-  char *end_pos = m_char_buff + strlen(m_char_buff) - 1;
-  // Trim possible trailing newline
-  if (*end_pos == '\n') {
-    *end_pos = 0;
-  }
+  strlcpy(m_char_buff, (const char *)data, MIN(sizeof(m_char_buff), length));
+  strtrim(m_char_buff);
   RESP_ASYNC("NUS:%s", m_char_buff);
   return false;
 }
@@ -86,7 +94,7 @@ void nus_c_response(uint8_t *data, uint32_t length) {
   if (!data && length) {
     RESP_ASYNC("NUS_DETECTED");
   } else if (data) {
-    RESP_ASYNC("NUSC:%s", (char*)data);
+    RESP_ASYNC("NUSC:%s", (char *)data);
   }
 }
 
@@ -235,35 +243,8 @@ static void advertise() {
 //--------------------------------------------------------------------------
 
 static void add_uuid() {
-  ble_uuid128_t base_uuid;
-  ble_uuid_t service_uuid;
-  const char *s = m_params[0];
-  int ind = 15;
-  bool ok = true;
-  // Read base uuid hex values, big endian
-  while (ok && *s != 0 && *s != ',') {
-    if (*s == '-') {
-      // Uuid field separator
-      s++;
-      continue;
-    }
-    ok = hex_to_bytes(s, base_uuid.uuid128 + (ind--), 1) == 1;
-    s += 2;
-  }
-  ok = ok && ind == -1 && s != NULL;
-  if (ok) {
-    ret_code_t res = sd_ble_uuid_vs_add(&base_uuid, &service_uuid.type);
-    if (res != NRF_SUCCESS) {
-      VALIDATE_NRF(res);
-    } else {
-      // Service uuid
-      service_uuid.uuid = *((uint16_t *)&base_uuid.uuid128 + 6);
-      if (service_uuid.uuid) {
-        VALIDATE_NRF(ble_db_discovery_evt_register(&service_uuid));
-      } else {
-        CMD_OK();
-      }
-    }
+  if (enrf_add_uuid(m_params[0]) == NRF_SUCCESS) {
+    CMD_OK();
   } else {
     CMD_ERROR("Invalid UUID");
   }
@@ -385,6 +366,7 @@ const char *m_help =
 
 static void handle_command() {
   m_param_cnt = 0;
+  strtrim(m_command);
   char *pos = m_command;
   // Split up the parameters
   memset(m_params, 0, sizeof(m_params));

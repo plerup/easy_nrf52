@@ -95,9 +95,7 @@ async def uart_terminal(args):
         if client._backend.__class__.__name__ == "BleakClientBlueZDBus":
             await client._backend._acquire_mtu()
             if rx_char.max_write_without_response_size < 21:
-                print("* Failed to increase MTU")
-
-            #assert rx_char.max_write_without_response_size > 21, "Failed to increase MTU"
+                err("Failed to increase MTU")
         if args.string:
             for s in args.string.split(';'):
                 rx_event.clear()
@@ -112,7 +110,9 @@ async def uart_terminal(args):
             while True:
                 try:
                     data = await ainput()
-                except (EOFError, KeyboardInterrupt):
+                except (EOFError, KeyboardInterrupt, asyncio.CancelledError) as e:
+                    if  not isinstance(e, EOFError):
+                        print()
                     info("Exit...")
                     break
                 if not data:

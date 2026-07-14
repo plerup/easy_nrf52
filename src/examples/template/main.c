@@ -50,12 +50,13 @@ int main() {
   enrf_init("enrf template", NULL);
   bsp_init(BSP_INIT_LEDS, NULL);
   // Start advertising
-  enrf_start_advertise(true,                      // Connectable
-                       0, BLE_ADVDATA_FULL_NAME,  // No company ID, full name
-                       NULL, 0,                   // No data
-                       ADV_INTERVAL_MS, 0,        // No timeout
-                       nus_data_received          // Callback for nus
-                      );
+  enrf_start_advertise_ex(true,                      // Connectable
+                          0, BLE_ADVDATA_FULL_NAME,  // No company ID, full name
+                          NULL, 0,                   // No manufacturer data
+                          enrf_get_nus_uuid(), 1,    // Advertise NUS service
+                          ADV_INTERVAL_MS, 0,        // No timeout
+                          nus_data_received          // Callback for nus
+                         );
   while (true) {
     enrf_wait_for_event();
   }

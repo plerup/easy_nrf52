@@ -59,6 +59,10 @@ NRF_LOG_MODULE_REGISTER();
 #define APP_BLE_CONN_CFG_TAG            1
 #define APP_BLE_OBSERVER_PRIO           3
 
+#ifndef ENRF_ADV_DATA_SIZE_MAX
+# define ENRF_ADV_DATA_SIZE_MAX 128
+#endif
+
 // Global variables
 BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT);
 BLE_NUS_C_DEF(m_ble_nus_c);
@@ -72,7 +76,8 @@ NRF_BLE_GQ_DEF(m_ble_gatt_queue, /**< BLE GATT Queue instance. */
 
 static ble_gap_adv_params_t m_adv_params;
 static uint8_t m_adv_handle = BLE_GAP_ADV_SET_HANDLE_NOT_SET;
-static uint8_t m_enc_advdata[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+static uint8_t m_enc_advdata[ENRF_ADV_DATA_SIZE_MAX];
+static uint8_t m_enc_scan_rsp_data[BLE_GAP_ADV_SET_DATA_SIZE_MAX];
 static ble_gap_adv_data_t m_adv_data = {
   .adv_data = {
     .p_data = m_enc_advdata,
@@ -116,7 +121,6 @@ static ble_db_discovery_t        m_ble_db_discovery;
 // State variables
 static bool        m_is_advertising = false;
 static bool        m_is_central = false;
-static const char *m_device_name = "";
 static uint16_t    m_gatt_max_length;
 static int         m_restart = 0;
 static bool        m_long_range = false;
@@ -171,6 +175,31 @@ static void ble_dfu_evt_handler(ble_dfu_buttonless_evt_type_t event) {
 
 #endif
 
+static inline uint8_t _hex_val(char val) {
+  if (val >= '0' && val <= '9') {
+    return (uint8_t)(val) - '0';
+  } else if (val >= 'A' && val <= 'F') {
+    return (uint8_t)(val) - 'A' + 10;
+  } else if (val >= 'a' && val <= 'f') {
+    return (uint8_t)(val) - 'a' + 10;
+  } else {
+    return 0xFF;
+  }
+}
+
+//--------------------------------------------------------------------------
+
+static inline char _hex_char(uint8_t val) {
+  if (val >= 0 && val <= 9) {
+    return '0' + val;
+  } else if (val >= 10 && val <= 15) {
+    return 'A' + val - 10;
+  }
+  return 0;
+}
+
+//--------------------------------------------------------------------------
+
 static void timers_init(void) {
   ret_code_t err_code = app_timer_init();
   APP_ERROR_CHECK(err_code);
@@ -181,22 +210,11 @@ static void timers_init(void) {
 static void gap_params_init(void) {
   uint32_t err_code;
   ble_gap_conn_params_t gap_conn_params;
-  ble_gap_conn_sec_mode_t sec_mode;
-
-  BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
-
-  err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                        (const uint8_t *)m_device_name,
-                                        strlen(m_device_name));
-  APP_ERROR_CHECK(err_code);
-
   memset(&gap_conn_params, 0, sizeof(gap_conn_params));
-
   gap_conn_params.min_conn_interval = m_connection_param.min_conn_interval;
   gap_conn_params.max_conn_interval = m_connection_param.max_conn_interval;
   gap_conn_params.slave_latency = m_connection_param.slave_latency;
   gap_conn_params.conn_sup_timeout = m_connection_param.conn_sup_timeout;
-
   err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
   APP_ERROR_CHECK(err_code);
 }
@@ -486,59 +504,141 @@ void enrf_set_tx_power(int tx_power) {
 
 //--------------------------------------------------------------------------
 
+ret_code_t enrf_set_device_name(const char *dev_name) {
+  ble_gap_conn_sec_mode_t sec_mode;
+  BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+  return sd_ble_gap_device_name_set(&sec_mode,
+                                    (const uint8_t *)dev_name,
+                                    strlen(dev_name));
+
+
+}
+
+//--------------------------------------------------------------------------
+
 ret_code_t enrf_start_advertise(bool connectable,
                                 uint16_t company_id, ble_advdata_name_type_t type,
                                 uint8_t *p_data, uint8_t size,
                                 uint32_t interval_ms, uint32_t timeout_s,
                                 nus_rx_cb_t nus_cb) {
-  uint32_t err_code;
+  return enrf_start_advertise_ex(connectable, company_id, type, p_data, size,  NULL, 0,
+                                 interval_ms, timeout_s, nus_cb);
+}
+
+//--------------------------------------------------------------------------
+
+ret_code_t enrf_start_advertise_ex(bool connectable,
+                                   uint16_t company_id,
+                                   ble_advdata_name_type_t type,
+                                   uint8_t *p_manuf_data, uint8_t manuf_data_size,
+                                   ble_uuid_t *p_uuids, uint8_t uuid_cnt,
+                                   uint32_t interval_ms, uint32_t timeout_s,
+                                   nus_rx_cb_t nus_cb) {
+  ret_code_t err_code;
   ble_advdata_t advdata;
+  ble_advdata_t srdata;
 
+  if (((p_manuf_data == NULL) && (manuf_data_size > 0)) ||
+      ((p_uuids == NULL) && (uuid_cnt > 0))) {
+    return NRF_ERROR_NULL;
+  }
   enrf_stop_advertise(m_adv_handle);
-
   m_app_nus_rec_cb = nus_cb;
 
   // Set advertisement data
   memset(&advdata, 0, sizeof(advdata));
+  memset(&srdata, 0, sizeof(srdata));
+
   advdata.name_type = type;
-  advdata.flags = connectable ? BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE :
+  advdata.flags = connectable ?
+                  BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE :
                   BLE_GAP_ADV_FLAG_BR_EDR_NOT_SUPPORTED;
-  if (p_data != NULL) {
+
+  // Manufacturer data
+  if ((p_manuf_data != NULL) && (manuf_data_size > 0)) {
     static ble_advdata_manuf_data_t manuf_specific_data;
     manuf_specific_data.company_identifier = company_id;
-    manuf_specific_data.data.p_data = p_data;
-    manuf_specific_data.data.size = size;
+    manuf_specific_data.data.p_data = p_manuf_data;
+    manuf_specific_data.data.size = manuf_data_size;
     advdata.p_manuf_specific_data = &manuf_specific_data;
   }
 
-  m_adv_data.adv_data.len = sizeof(m_enc_advdata);
+  /*
+   * Long-range advertising is non-scannable, so UUIDs must be included
+   * in the primary extended advertising data. For normal advertising,
+   * place UUIDs in the scan response to preserve space for the name and
+   * manufacturer data in the primary advertisement.
+   */
+  if ((p_uuids != NULL) && (uuid_cnt > 0)) {
+    if (m_long_range) {
+      advdata.uuids_complete.uuid_cnt = uuid_cnt;
+      advdata.uuids_complete.p_uuids = p_uuids;
+    } else {
+      srdata.uuids_complete.uuid_cnt = uuid_cnt;
+      srdata.uuids_complete.p_uuids = p_uuids;
+    }
+  }
+  m_adv_data.adv_data.p_data = m_enc_advdata;
+  m_adv_data.adv_data.len =
+    MIN(sizeof(m_enc_advdata),
+        m_long_range ? ENRF_ADV_DATA_SIZE_MAX
+        : BLE_GAP_ADV_SET_DATA_SIZE_MAX);
+  m_adv_data.scan_rsp_data.p_data = NULL;
+  m_adv_data.scan_rsp_data.len = 0;
 
   // Set advertisement parameters
   memset(&m_adv_params, 0, sizeof(m_adv_params));
   if (m_long_range) {
     m_adv_params.properties.type =
-      connectable ? BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED :
+      connectable ?
+      BLE_GAP_ADV_TYPE_EXTENDED_CONNECTABLE_NONSCANNABLE_UNDIRECTED :
       BLE_GAP_ADV_TYPE_EXTENDED_NONCONNECTABLE_NONSCANNABLE_UNDIRECTED;
     m_adv_params.primary_phy = BLE_GAP_PHY_CODED;
     m_adv_params.secondary_phy = BLE_GAP_PHY_CODED;
   } else {
     m_adv_params.properties.type =
-      connectable ? BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED :
+      connectable ?
+      BLE_GAP_ADV_TYPE_CONNECTABLE_SCANNABLE_UNDIRECTED :
       BLE_GAP_ADV_TYPE_NONCONNECTABLE_SCANNABLE_UNDIRECTED;
     m_adv_params.primary_phy = BLE_GAP_PHY_1MBPS;
     m_adv_params.secondary_phy = BLE_GAP_PHY_1MBPS;
   }
+
   m_adv_params.filter_policy = BLE_GAP_ADV_FP_ANY;
   m_adv_params.interval = MSEC_TO_UNITS(interval_ms, UNIT_0_625_MS);
-  m_adv_params.duration = timeout_s * 100;
-  err_code = ble_advdata_encode(&advdata, m_adv_data.adv_data.p_data, &m_adv_data.adv_data.len);
-  APP_ERROR_CHECK(err_code);
-  err_code = sd_ble_gap_adv_set_configure(&m_adv_handle, &m_adv_data, &m_adv_params);
-  APP_ERROR_CHECK(err_code);
+  m_adv_params.duration = timeout_s * 100; // In 10 ms units
+  err_code = ble_advdata_encode(&advdata,
+                                m_adv_data.adv_data.p_data,
+                                &m_adv_data.adv_data.len);
+  if (err_code != NRF_SUCCESS) {
+    return err_code;
+  }
+
+  if (!m_long_range && (p_uuids != NULL) && (uuid_cnt > 0)) {
+    m_adv_data.scan_rsp_data.p_data = m_enc_scan_rsp_data;
+    m_adv_data.scan_rsp_data.len = MIN(sizeof(m_enc_scan_rsp_data), BLE_GAP_ADV_SET_DATA_SIZE_MAX);
+    err_code = ble_advdata_encode(&srdata,
+                                  m_adv_data.scan_rsp_data.p_data,
+                                  &m_adv_data.scan_rsp_data.len);
+    if (err_code != NRF_SUCCESS) {
+      return err_code;
+    }
+  }
+
+  err_code = sd_ble_gap_adv_set_configure(&m_adv_handle,
+                                          &m_adv_data,
+                                          &m_adv_params);
+  if (err_code != NRF_SUCCESS) {
+    return err_code;
+  }
 
   // And transmission output power
-  err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, m_adv_handle, m_tx_power);
-  APP_ERROR_CHECK(err_code);
+  err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV,
+                                     m_adv_handle,
+                                     m_tx_power);
+  if (err_code != NRF_SUCCESS) {
+    return err_code;
+  }
 
   m_is_central = false;
 
@@ -554,6 +654,15 @@ ret_code_t enrf_start_advertise(bool connectable,
 ret_code_t enrf_stop_advertise() {
   m_is_advertising = false;
   return sd_ble_gap_adv_stop(m_adv_handle);
+}
+
+//--------------------------------------------------------------------------
+
+ble_uuid_t *enrf_get_nus_uuid() {
+  static ble_uuid_t nus_uuid;
+  nus_uuid.uuid = BLE_UUID_NUS_SERVICE;
+  nus_uuid.type = m_nus.uuid_type;
+  return &nus_uuid;
 }
 
 //--------------------------------------------------------------------------
@@ -835,38 +944,56 @@ void enrf_restart(bool enter_dfu) {
 
 //--------------------------------------------------------------------------
 
-ret_code_t enrf_add_uuid(const char *uuid) {
-  ret_code_t res;
+ret_code_t enrf_uuid_from_string(const char *uuid, ble_uuid_t *p_uuid) {
   ble_uuid128_t base_uuid;
-  ble_uuid_t service_uuid;
   const char *s = uuid;
   int ind = 15;
-  bool ok = true;
-  // Read base uuid hex values, big endian
-  while (ok && *s != 0 && *s != ',') {
+
+  if ((uuid == NULL) || (p_uuid == NULL)) {
+    return NRF_ERROR_NULL;
+  }
+
+  // Read UUID hex values and store them in little-endian order
+  while (*s != '\0') {
+    uint8_t high;
+    uint8_t low;
     if (*s == '-') {
-      // Uuid field separator
       s++;
       continue;
     }
-    unsigned int b;
-    ok = sscanf(s, "%02X", &b) == 1;
-    *(base_uuid.uuid128 + (ind--)) = b;
+    if ((ind < 0) || (s[1] == '\0')) {
+      return NRF_ERROR_INVALID_PARAM;
+    }
+    high = _hex_val(s[0]);
+    low = _hex_val(s[1]);
+    if ((high > 0x0f) || (low > 0x0f)) {
+      return NRF_ERROR_INVALID_PARAM;
+    }
+    base_uuid.uuid128[ind--] = (high << 4) | low;
     s += 2;
   }
-  ok = ok && ind == -1 && s != NULL;
-  if (ok) {
-    res = sd_ble_uuid_vs_add(&base_uuid, &service_uuid.type);
-    if (res == NRF_SUCCESS) {
-      // Service uuid
-      service_uuid.uuid = *((uint16_t *)&base_uuid.uuid128 + 6);
-      if (service_uuid.uuid) {
-        res = ble_db_discovery_evt_register(&service_uuid);
-      }
-    }
-  } else {
-    res = NRF_ERROR_INVALID_PARAM;
-    NRF_LOG_ERROR("Invalid UUID");
+  if (ind != -1) {
+    return NRF_ERROR_INVALID_PARAM;
+  }
+
+  // Extract the variable 16-bit part of the UUID
+  p_uuid->uuid = ((uint16_t)base_uuid.uuid128[13] << 8) |
+                 base_uuid.uuid128[12];
+
+  // Register only the vendor-specific base UUID
+  base_uuid.uuid128[12] = 0;
+  base_uuid.uuid128[13] = 0;
+
+  return sd_ble_uuid_vs_add(&base_uuid, &p_uuid->type);
+}
+//--------------------------------------------------------------------------
+
+ret_code_t enrf_add_uuid(const char *uuid) {
+  ret_code_t res;
+  ble_uuid_t service_uuid;
+  res = enrf_uuid_from_string(uuid, &service_uuid);
+  if (res == NRF_SUCCESS) {
+    res = ble_db_discovery_evt_register(&service_uuid);
   }
   return res;
 }
@@ -911,20 +1038,6 @@ const char *enrf_get_device_address() {
 
 //--------------------------------------------------------------------------
 
-static inline uint8_t _hex_val(char val) {
-  if (val >= '0' && val <= '9') {
-    return (uint8_t)(val) - '0';
-  } else if (val >= 'A' && val <= 'F') {
-    return (uint8_t)(val) - 'A' + 10;
-  } else if (val >= 'a' && val <= 'f') {
-    return (uint8_t)(val) - 'a' + 10;
-  } else {
-    return 0xFF;
-  }
-}
-
-//--------------------------------------------------------------------------
-
 uint32_t hex_to_bytes(const char *str, uint8_t *bytes, uint32_t max_len) {
   uint32_t len = MIN(strlen(str) / 2, max_len);
   for (uint32_t i = 0; i < len; i++) {
@@ -941,17 +1054,6 @@ uint32_t hex_to_bytes(const char *str, uint8_t *bytes, uint32_t max_len) {
     bytes++;
   }
   return len;
-}
-
-//--------------------------------------------------------------------------
-
-static inline char _hex_char(uint8_t val) {
-  if (val >= 0 && val <= 9) {
-    return '0' + val;
-  } else if (val >= 10 && val <= 15) {
-    return 'A' + val - 10;
-  }
-  return 0;
 }
 
 //--------------------------------------------------------------------------
@@ -1263,8 +1365,6 @@ uint32_t enrf_millis() {
 
 bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
   ret_code_t err_code;
-  m_device_name = dev_name;
-
   bool do_log = true;
 #ifdef ENRF_ENABLE_LOG_PIN
   // Log control pin defined, must be low for log to be enabled
@@ -1299,6 +1399,7 @@ bool enrf_init(const char *dev_name, nrf_sdh_ble_evt_handler_t ble_evt_cb) {
   gatt_init();
   services_init();
   conn_params_init();
+  enrf_set_device_name(dev_name);
 #if SDK_VERSION >= 17
   ble_db_discovery_init_t db_init;
   memset(&db_init, 0, sizeof(ble_db_discovery_init_t));

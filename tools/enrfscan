@@ -4,12 +4,13 @@
 #
 # Scan and list information about advertising BLE devices
 # New listing whenever the advertisement changes
-# Format: address;name;manufacurer_data;rssi
-# Possible filter string can be on the command line
+# Format: address;name;manufacurer_data|services;rssi
+# Optional filter string as parameter
 #
 
 import asyncio
 import sys
+import argparse
 
 from bleak import BleakScanner
 from bleak.exc import BleakDBusError
@@ -17,21 +18,24 @@ from bleak.backends.scanner import AdvertisementData
 from bleak.backends.device import BLEDevice
 
 
-async def do_scan(match):
+async def do_scan(match, services):
     dev_list = dict()
 
     def show_if_match(device: BLEDevice, adv: AdvertisementData):
-        manuf_data = ""
-        for company, data in adv.manufacturer_data.items():
-            manuf_data += "%02X" % int((company) % 255) + "%02X" % int((company)/255)
-            manuf_data += data.hex().upper()
-        info = device.address + ";" + (adv.local_name or "") + ";" + manuf_data
+        data = ""
+        if services:
+            data = str(adv.service_uuids)
+        else:
+            for company, _data in adv.manufacturer_data.items():
+                data += "%02X" % int((company) % 255) + "%02X" % int((company)/255)
+                data += _data.hex().upper()
+        info = device.address + ";" + (adv.local_name or "") + ";" + data
         if not device.address in dev_list:
             dev_list[device.address] = ""
         if (len(match) == 0 or match in info) and dev_list[device.address] != info:
             rssi = adv.rssi if hasattr(adv, "rssi") else device.rssi
             print(info + ";" + str(rssi), flush=True)
-        if len(sys.argv) < 3:
+        if len(match) > 0 or services:
             dev_list[device.address] = info
         return False
 
@@ -40,8 +44,15 @@ async def do_scan(match):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='BLE scanner')
+    parser.add_argument('-m', dest='match', default="",
+                        help='Filter string')
+    parser.add_argument('-s', dest='services', action='store_true',
+                        help='Show services instead of manufacturer data')
+    args = parser.parse_args()
+
     try:
-        asyncio.run(do_scan("" if len(sys.argv) < 2 else str(sys.argv[1])))
+        asyncio.run(do_scan(args.match, args.services))
     except BleakDBusError:
         print("Internal bus error")
         pass

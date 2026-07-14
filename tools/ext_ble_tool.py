@@ -128,11 +128,13 @@ def run(cmd):
     try:
         cmd()
 
-    except (KeyboardInterrupt, EOFError):
+    except (KeyboardInterrupt, EOFError) as e:
         try:
             send_string(f"led;{indicator_led};0")
             if connected:
-                print("\nDisconnecting...")
+                if isinstance(e, KeyboardInterrupt):
+                    print()
+                print("Disconnecting...")
                 send_string("disconnect")
                 time.sleep(0.5)
             elif connecting:
