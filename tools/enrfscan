@@ -27,7 +27,7 @@ async def do_scan(match, services):
             data = str(adv.service_uuids)
         else:
             for company, _data in adv.manufacturer_data.items():
-                data += "%02X" % int((company) % 255) + "%02X" % int((company)/255)
+                data += company.to_bytes(2, byteorder="little").hex().upper()
                 data += _data.hex().upper()
         info = device.address + ";" + (adv.local_name or "") + ";" + data
         if not device.address in dev_list:
