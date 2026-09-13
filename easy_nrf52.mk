@@ -162,7 +162,11 @@ ifneq ($(UART_LOG),0)
   CFLAGS += -DNRF_LOG_BACKEND_UART_ENABLED=1 -DNRF_LOG_BACKEND_RTT_ENABLED=0
 endif
 
-# Buttonless DFU
+# Buttonless DFU. The power management module can retry a shutdown into DFU
+# mode that an application handler refused; that costs a 1 s wake-up timer
+# for the whole life of the application, so it is off unless a project asks
+# for it with AUTO_SHUTDOWN_RETRY=1
+AUTO_SHUTDOWN_RETRY ?= 0
 ifeq ($(BUTTONLESS_DFU),1)
   INC_FOLDERS += \
     $(SDK_ROOT)/components/libraries/bootloader \
@@ -174,7 +178,7 @@ ifeq ($(BUTTONLESS_DFU),1)
     $(SDK_ROOT)/components/ble/ble_services/ble_dfu/ble_dfu_unbonded.c
 
   CFLAGS += \
-    -DBLE_DFU_ENABLED=1 -DNRF_PWR_MGMT_CONFIG_AUTO_SHUTDOWN_RETRY=1 \
+    -DBLE_DFU_ENABLED=1 -DNRF_PWR_MGMT_CONFIG_AUTO_SHUTDOWN_RETRY=$(AUTO_SHUTDOWN_RETRY) \
     -DNRF_SDH_BLE_SERVICE_CHANGED=1 -DBL_SETTINGS_ACCESS_ONLY -DNRF_DFU_TRANSPORT_BLE=1
 endif
 
